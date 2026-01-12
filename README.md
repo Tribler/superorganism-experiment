@@ -1,6 +1,8 @@
 # superorganism-experiment
 Unstoppable by design, self-replicating, self-hosted, self-evolving, and human oversight with democratic governance. Well, that is our Utopian dream!
 
+<img width="1838" height="885" alt="Image" src="https://github.com/user-attachments/assets/971b1bfb-7566-4e3f-b51a-04b8202c8c14" />
+
 # Desired features for first March release
 
 1) A million URLs with creative commons content
