@@ -10,7 +10,16 @@ Unstoppable by design, self-replicating, self-hosted, self-evolving, and human o
 5) Voting and use your Bitcoin wallet to stake your identity (public key)
 
 Andrei: live switch between re-ranking algorithm
+
 Stan: voting and stake your identity
+
 Matei: self-replicating server
+
 Aayush: trust framework, reputation function of identities
+
 Costa: caching function and evenly seeded swarms.
+
+What goes on the front-page? Status of liberated content.
+
+other ideas: Bounties, seedbox fleet? status of IPv8 network? Money in system, amount of discovered users?
+
