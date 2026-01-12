@@ -1,0 +1,7 @@
+.idea
+.venv
+.vscode
+__pycache__/
+liberation_key.pem
+torrents.csv
+dht_health.db
