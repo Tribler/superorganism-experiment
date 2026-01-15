@@ -1,0 +1,9 @@
+libtorrent
+google-api-python-client
+python-dotenv
+
+# SporeStack deployment
+requests>=2.28.0
+paramiko>=3.0.0
+scp>=0.14.0
+bitcoinlib>=0.6.0

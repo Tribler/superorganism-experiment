@@ -1,0 +1,5 @@
+libtorrent
+pyipv8==3.1.0
+
+# Bitcoin wallet (watch-only)
+bitcoinlib>=0.6.0

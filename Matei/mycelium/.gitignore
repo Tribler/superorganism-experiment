@@ -139,6 +139,7 @@ dist/
 downloads/
 eggs/
 .eggs/
+lib/
 lib64/
 parts/
 sdist/
@@ -318,5 +319,24 @@ pyrightconfig.json
 # Ignore all local history of files
 .history
 .ionide
+
+CLAUDE.md
+context/
+bootstrap_scripts/
+
+code/utils/logger
+
+# Mycelium runtime data
+*.log
+logs/
+data/
+music/
+*.torrent
+
+# Bitcoin wallet files (watch-only wallet database)
+*.db
+*.db-shm
+*.db-wal
+wallets/
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript
