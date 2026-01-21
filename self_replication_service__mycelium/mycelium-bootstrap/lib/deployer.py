@@ -32,7 +32,7 @@ class Deployer:
     """SSH-based deployer for remote server setup and mycelium deployment."""
 
     MYCELIUM_REPO_URL = "https://github.com/Tribler/superorganism-experiment.git"
-    MYCELIUM_SUBPATH = "Matei/mycelium"
+    MYCELIUM_SUBPATH = "self_replication_service__mycelium/mycelium"
     REMOTE_BASE_DIR = "/root/mycelium"
     REMOTE_VENV_DIR = "/root/mycelium/venv"
     REMOTE_CONTENT_DIR = "/root/music"

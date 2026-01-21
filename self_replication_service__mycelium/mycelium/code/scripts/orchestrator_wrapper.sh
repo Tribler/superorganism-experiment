@@ -6,8 +6,8 @@
 # Exit code 42 indicates restart required after code update.
 # Other exit codes terminate the wrapper.
 
-ORCHESTRATOR_DIR="${MYCELIUM_BASE_DIR:-/home/vagrant/mycelium}/code"
-LOG_DIR="${MYCELIUM_LOG_DIR:-/home/vagrant/logs}"
+ORCHESTRATOR_DIR="${MYCELIUM_BASE_DIR:-/root/mycelium}/code"
+LOG_DIR="${MYCELIUM_LOG_DIR:-/root/logs}"
 EXIT_RESTART=42
 
 log() {

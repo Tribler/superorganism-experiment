@@ -1,8 +1,7 @@
 """
 Configuration management for the autonomous orchestrator.
 
-All configuration values are sourced from environment variables with
-sensible defaults for development environments.
+All configuration values are sourced from environment variables.
 """
 
 import os
@@ -12,22 +11,22 @@ from pathlib import Path
 class Config:
     """Central configuration for the orchestrator system."""
 
-    # Repository configuration
+    # Repository
     REPO_URL: str = os.getenv(
         "MYCELIUM_REPO_URL",
-        "https://github.com/DogariuMatei/mycelium.git"
+        "https://github.com/Tribler/superorganism-experiment.git"
     )
     REPO_BRANCH: str = os.getenv("MYCELIUM_BRANCH", "main")
 
-    # Timing configuration
-    UPDATE_CHECK_INTERVAL: int = int(os.getenv("MYCELIUM_UPDATE_INTERVAL", "10"))
+    # Timing
+    UPDATE_CHECK_INTERVAL: int = int(os.getenv("MYCELIUM_UPDATE_INTERVAL", "60"))
     HEARTBEAT_INTERVAL: int = int(os.getenv("MYCELIUM_HEARTBEAT_INTERVAL", "60"))
 
-    # Path configuration
-    BASE_DIR: Path = Path(os.getenv("MYCELIUM_BASE_DIR", "/home/vagrant/mycelium"))
-    LOG_DIR: Path = Path(os.getenv("MYCELIUM_LOG_DIR", "/home/vagrant/logs"))
-    DATA_DIR: Path = Path(os.getenv("MYCELIUM_DATA_DIR", "/home/vagrant/data"))
-    CONTENT_DIR: Path = Path(os.getenv("MYCELIUM_CONTENT_DIR", "/home/vagrant/music"))
+    # Paths
+    BASE_DIR: Path = Path(os.getenv("MYCELIUM_BASE_DIR", "/root/mycelium"))
+    LOG_DIR: Path = Path(os.getenv("MYCELIUM_LOG_DIR", "/root/logs"))
+    DATA_DIR: Path = Path(os.getenv("MYCELIUM_DATA_DIR", "/root/data"))
+    CONTENT_DIR: Path = Path(os.getenv("MYCELIUM_CONTENT_DIR", "/root/music"))
 
     # Seedbox configuration
     TORRENT_TRACKER: str = os.getenv(

@@ -322,7 +322,6 @@ pyrightconfig.json
 
 CLAUDE.md
 context/
-bootstrap_scripts/
 
 code/utils/logger
 
