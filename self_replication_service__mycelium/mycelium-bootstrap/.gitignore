@@ -108,7 +108,7 @@ ipython_config.py
 /platforms
 /hooks
 /node_modules
-/lib
+# /lib  # Commented out - we use lib/ for our source code
 /debugger
 /dist
 
@@ -139,6 +139,7 @@ dist/
 downloads/
 eggs/
 .eggs/
+# lib/  # Commented out - we use lib/ for our source code
 lib64/
 parts/
 sdist/
@@ -318,5 +319,40 @@ pyrightconfig.json
 # Ignore all local history of files
 .history
 .ionide
+
+CLAUDE.md
+.claude
+context/
+bootstrap_scripts/
+
+code/utils/logger
+
+# Mycelium runtime data
+*.log
+logs/
+data/
+CreativeCommonsMusic/*
+*.torrent
+
+.ENV
+
+# Bitcoin wallet files
+*.db
+*.db-shm
+*.db-wal
+wallets/
+~/.mycelium/
+
+# SSH keys for deployment
+*.pem
+*_key
+*_key.pub
+deploy_key*
+id_rsa*
+id_ed25519*
+
+# SporeStack deployment secrets
+.sporestack/
+*.token
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript
