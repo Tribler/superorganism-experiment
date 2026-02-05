@@ -3,7 +3,7 @@ Unstoppable by design, self-replicating, self-hosted, self-evolving, and human o
 
 <img width="1838" height="885" alt="Image" src="https://github.com/user-attachments/assets/971b1bfb-7566-4e3f-b51a-04b8202c8c14" />
 
-# Desired features for first March release
+# Everything we built so far / Desired features for first March release
 
 1) A million URLs with creative commons content
 2) Liberate this content to robotic Bittorrent seedboxes fleet
