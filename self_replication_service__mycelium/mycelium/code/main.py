@@ -112,13 +112,20 @@ class Orchestrator:
 
     async def run_seedbox_info_announcer(self) -> None:
         """Run the seedbox info broadcast loop (waits for community init)."""
+        logger.info("[SEEDBOX-INFO] Waiting for community to initialize...")
         # Wait until the announcer has initialized the community
+        wait_count = 0
         while self.running and self.announcer.community is None:
+            wait_count += 1
+            if wait_count % 10 == 0:
+                logger.info("[SEEDBOX-INFO] Still waiting for community... (%ds)", wait_count)
             await asyncio.sleep(1)
 
         if not self.running:
+            logger.info("[SEEDBOX-INFO] Orchestrator stopped before community init")
             return
 
+        logger.info("[SEEDBOX-INFO] Community ready, starting seedbox info loop")
         try:
             await self.announcer.seedbox_info_loop(interval=60)
         except Exception as e:
