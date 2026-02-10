@@ -110,6 +110,20 @@ class Orchestrator:
         finally:
             await self.announcer.stop()
 
+    async def run_seedbox_info_announcer(self) -> None:
+        """Run the seedbox info broadcast loop (waits for community init)."""
+        # Wait until the announcer has initialized the community
+        while self.running and self.announcer.community is None:
+            await asyncio.sleep(1)
+
+        if not self.running:
+            return
+
+        try:
+            await self.announcer.seedbox_info_loop(interval=60)
+        except Exception as e:
+            logger.error(f"Seedbox info announcer error: {e}", exc_info=True)
+
     async def run(self) -> None:
         """Main orchestrator loop."""
         self.running = True
@@ -129,6 +143,7 @@ class Orchestrator:
             asyncio.create_task(self.heartbeat()),
             asyncio.create_task(self.run_seedbox_loop()),
             asyncio.create_task(self.run_announcer()),
+            asyncio.create_task(self.run_seedbox_info_announcer()),
         ]
 
         try:

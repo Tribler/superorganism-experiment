@@ -17,6 +17,21 @@ class LiberatedContentPayload(DataClassPayload[1]):
     timestamp: int  # Unix timestamp when content was liberated
 
 
+@dataclass
+class SeedboxInfoPayload(DataClassPayload[2]):
+    """Payload for receiving seedbox fleet info."""
+    friendly_name: str
+    public_ip: str
+    git_commit_hash: str
+    uptime_seconds: int
+    disk_total_bytes: int
+    disk_used_bytes: int
+    btc_address: str
+    btc_balance_sat: int
+    vps_provider_region: str
+    vps_days_remaining: int
+
+
 class LiberationCommunitySettings(CommunitySettings):
     pass
 
@@ -32,12 +47,16 @@ class LiberationCommunity(Community):
         # Signature: (peer: bytes, infohash: str) -> None
         self.duplicate_peers_callback: Optional[Callable[[bytes, str], None]] = None
         
-        # Register message handler
+        # Register message handlers
         self.add_message_handler(LiberatedContentPayload, self.on_liberated_content)
-        
+        self.add_message_handler(SeedboxInfoPayload, self.on_seedbox_info)
+
         # Callback for when new content is received (for future seeding integration)
         # Signature: (payload: LiberatedContentPayload) -> None
         self.on_content_received_callback: Optional[Callable[[Peer, LiberatedContentPayload], None]] = None
+
+        # Callback for received seedbox info
+        self.on_seedbox_info_callback: Optional[Callable[[Peer, SeedboxInfoPayload], None]] = None
         
         self.logger.info("LiberationCommunity initialized (peer mid: %s)",
                         self.my_peer.mid.hex()[:16])
@@ -110,4 +129,23 @@ class LiberationCommunity(Community):
 
     def set_duplicate_peers_callback(self, callback: Callable[[bytes, str], None]) -> None:
         self.duplicate_peers_callback = callback
+
+    @lazy_wrapper(SeedboxInfoPayload)
+    def on_seedbox_info(self, peer: Peer, payload: SeedboxInfoPayload) -> None:
+        """Handle received seedbox info."""
+        self.logger.info("Received seedbox info from peer %s: %s",
+                        peer.mid.hex()[:16], payload.friendly_name)
+
+        if self.on_seedbox_info_callback:
+            try:
+                self.on_seedbox_info_callback(peer, payload)
+            except Exception as e:
+                self.logger.error("Error in seedbox info callback: %s", e)
+
+    def set_seedbox_info_callback(
+        self,
+        callback: Callable[[Peer, SeedboxInfoPayload], None]
+    ) -> None:
+        """Set callback for when seedbox info is received from peers."""
+        self.on_seedbox_info_callback = callback
 

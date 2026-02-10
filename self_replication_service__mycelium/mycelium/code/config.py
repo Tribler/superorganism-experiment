@@ -28,6 +28,10 @@ class Config:
     DATA_DIR: Path = Path(os.getenv("MYCELIUM_DATA_DIR", "/root/data"))
     CONTENT_DIR: Path = Path(os.getenv("MYCELIUM_CONTENT_DIR", "/root/music"))
 
+    # Node identity
+    FRIENDLY_NAME: str = os.getenv("MYCELIUM_FRIENDLY_NAME", "mycelium-node")
+    PUBLIC_IP: str = os.getenv("MYCELIUM_PUBLIC_IP", "")
+
     # Seedbox configuration
     TORRENT_TRACKER: str = os.getenv(
         "MYCELIUM_TRACKER",

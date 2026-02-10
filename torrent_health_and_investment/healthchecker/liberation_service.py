@@ -10,7 +10,7 @@ from ipv8_service import IPv8
 from ipv8.taskmanager import TaskManager
 from ipv8.peer import Peer
 
-from healthchecker.liberation_community import LiberationCommunity, LiberatedContentPayload
+from healthchecker.liberation_community import LiberationCommunity, LiberatedContentPayload, SeedboxInfoPayload
 from healthchecker.csv_loader import CSVTorrentLoader, TorrentEntry
 
 
@@ -36,6 +36,9 @@ class LiberationService:
 
         # Track received content by infohash to avoid processing duplicates
         self.received_content: Set[str] = set()
+
+        # In-memory seedbox fleet info: peer_mid hex -> {payload fields + last_seen}
+        self.seedbox_fleet: Dict[str, dict] = {}
 
 
     async def start(self) -> None:
@@ -95,8 +98,8 @@ class LiberationService:
         print(f"My peer ID: {self.community.my_peer.mid.hex()[:16]}...")
 
         self.community.set_duplicate_peers_callback(self.add_duplicate_peers)
-        
         self.community.set_content_received_callback(self.on_content_received)
+        self.community.set_seedbox_info_callback(self.on_seedbox_info_received)
         
         self.task_manager = TaskManager()
 
@@ -212,6 +215,23 @@ class LiberationService:
             print(f"           Infohash: {infohash[:16]}...")
         else:
             print(f"[DUPLICATE] Already in database: {infohash[:16]}...")
+
+    def on_seedbox_info_received(self, from_peer: Peer, payload: SeedboxInfoPayload) -> None:
+        peer_mid = from_peer.mid.hex()[:16]
+        self.seedbox_fleet[peer_mid] = {
+            "friendly_name": payload.friendly_name,
+            "public_ip": payload.public_ip,
+            "git_commit_hash": payload.git_commit_hash,
+            "uptime_seconds": payload.uptime_seconds,
+            "disk_total_bytes": payload.disk_total_bytes,
+            "disk_used_bytes": payload.disk_used_bytes,
+            "btc_address": payload.btc_address,
+            "btc_balance_sat": payload.btc_balance_sat,
+            "vps_provider_region": payload.vps_provider_region,
+            "vps_days_remaining": payload.vps_days_remaining,
+            "last_seen": int(time.time()),
+        }
+        print(f"[SEEDBOX] Updated fleet info from {payload.friendly_name} ({peer_mid})")
 
     def _extract_infohash(self, magnet_link: str) -> Optional[str]:
         try:

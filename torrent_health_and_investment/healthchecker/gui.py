@@ -13,12 +13,13 @@ from healthchecker.sampler import HealthChecker
 
 class SwarmHealthGUI:
 
-    def __init__(self, csv_path: str = "torrents.csv", mode: str = "csv"):
+    def __init__(self, csv_path: str = "torrents.csv", mode: str = "csv", seedbox_fleet: Optional[dict] = None):
         self.csv_path = csv_path
         self.mode = mode
         self.checker: Optional[HealthChecker] = None
         self.running = Event()
         self.refresh_thread: Optional[Thread] = None
+        self.seedbox_fleet = seedbox_fleet or {}
         
         # Initialize database
         init_db()
@@ -138,10 +139,51 @@ class SwarmHealthGUI:
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
         
+        # Seedbox Fleet frame
+        fleet_frame = ttk.Labelframe(main_frame, text="Seedbox Fleet", padding="10")
+        fleet_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        main_frame.rowconfigure(4, weight=1)
+
+        self.fleet_count_label = ttk.Label(fleet_frame, text="Nodes: 0", font=("Arial", 10))
+        self.fleet_count_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+
+        fleet_tree_frame = ttk.Frame(fleet_frame)
+        fleet_tree_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        fleet_frame.rowconfigure(1, weight=1)
+        fleet_frame.columnconfigure(0, weight=1)
+
+        fleet_scroll_y = ttk.Scrollbar(fleet_tree_frame, orient=tk.VERTICAL)
+
+        fleet_columns = ("Name", "IP", "Commit", "Uptime", "Disk", "BTC", "Region", "Last Seen")
+        self.fleet_tree = ttk.Treeview(
+            fleet_tree_frame, columns=fleet_columns, show="headings",
+            yscrollcommand=fleet_scroll_y.set, height=5
+        )
+
+        for col in fleet_columns:
+            self.fleet_tree.heading(col, text=col, command=lambda _col=col: \
+                self.treeview_sort_column(self.fleet_tree, _col, False))
+
+        fleet_scroll_y.config(command=self.fleet_tree.yview)
+
+        self.fleet_tree.column("Name", width=120)
+        self.fleet_tree.column("IP", width=120)
+        self.fleet_tree.column("Commit", width=80)
+        self.fleet_tree.column("Uptime", width=100)
+        self.fleet_tree.column("Disk", width=120)
+        self.fleet_tree.column("BTC", width=100)
+        self.fleet_tree.column("Region", width=100)
+        self.fleet_tree.column("Last Seen", width=150)
+
+        self.fleet_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        fleet_scroll_y.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        fleet_tree_frame.rowconfigure(0, weight=1)
+        fleet_tree_frame.columnconfigure(0, weight=1)
+
         # Log area
         log_frame = ttk.Labelframe(main_frame, text="Log", padding="10")
-        log_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        main_frame.rowconfigure(4, weight=1)
+        log_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        main_frame.rowconfigure(5, weight=1)
         
         self.log_text = ScrolledText(log_frame, height=8, wrap=tk.WORD, autohide=True)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -226,9 +268,63 @@ class SwarmHealthGUI:
                     self.tree.set(item, "Status", "No Peers")
             
             self.log(f"Refreshed data: {total} entries, {healthy} healthy, {unhealthy} unhealthy")
-            
+
         except Exception as e:
             self.log(f"Error refreshing data: {e}")
+
+        self.refresh_fleet_data()
+
+    def refresh_fleet_data(self):
+        """Refresh the seedbox fleet treeview from the in-memory dict."""
+        try:
+            for item in self.fleet_tree.get_children():
+                self.fleet_tree.delete(item)
+
+            fleet_snapshot = dict(self.seedbox_fleet)
+
+            if not fleet_snapshot:
+                self.fleet_count_label.config(text="Nodes: 0")
+                self.fleet_tree.insert("", tk.END, values=("Waiting for data...", "", "", "", "", "", "", ""))
+                return
+
+            self.fleet_count_label.config(text=f"Nodes: {len(fleet_snapshot)}")
+
+            for peer_mid, info in fleet_snapshot.items():
+                uptime_s = info.get("uptime_seconds", 0)
+                hours, remainder = divmod(uptime_s, 3600)
+                minutes = remainder // 60
+                uptime_str = f"{hours}h {minutes}m"
+
+                disk_total = info.get("disk_total_bytes", 0)
+                disk_used = info.get("disk_used_bytes", 0)
+                if disk_total > 0:
+                    disk_gb_total = disk_total / (1024 ** 3)
+                    disk_gb_used = disk_used / (1024 ** 3)
+                    disk_str = f"{disk_gb_used:.1f}/{disk_gb_total:.1f} GB"
+                else:
+                    disk_str = "N/A"
+
+                btc_sat = info.get("btc_balance_sat", 0)
+                btc_str = f"{btc_sat} sat" if btc_sat else "-"
+
+                last_seen = info.get("last_seen", 0)
+                if last_seen:
+                    last_seen_str = datetime.fromtimestamp(last_seen).strftime("%H:%M:%S")
+                else:
+                    last_seen_str = "?"
+
+                self.fleet_tree.insert("", tk.END, values=(
+                    info.get("friendly_name", "?"),
+                    info.get("public_ip", "?"),
+                    info.get("git_commit_hash", "?"),
+                    uptime_str,
+                    disk_str,
+                    btc_str,
+                    info.get("vps_provider_region", "") or "-",
+                    last_seen_str,
+                ))
+        except Exception as e:
+            self.log(f"Error refreshing fleet data: {e}")
     
     def start_refresh_loop(self):
         def refresh_loop():
@@ -289,7 +385,7 @@ class SwarmHealthGUI:
         self.root.mainloop()
 
 
-def run_gui(csv_path: str = "torrents.csv", mode: str = "csv"):
-    app = SwarmHealthGUI(csv_path, mode)
+def run_gui(csv_path: str = "torrents.csv", mode: str = "csv", seedbox_fleet: dict = None):
+    app = SwarmHealthGUI(csv_path, mode, seedbox_fleet=seedbox_fleet)
     app.run()
 

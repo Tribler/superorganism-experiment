@@ -71,11 +71,14 @@ def main():
 
 
 def run_liberation_in_thread(key_file: str = None):
-    """Run the liberation service in a background thread with its own event loop."""
+    """Run the liberation service in a background thread with its own event loop.
+    Returns (thread, service) — service.seedbox_fleet is readable from any thread.
+    """
+    service = LiberationService(csv_path="/nonexistent/path.csv", key_file=key_file or "liberation_key.pem")
+
     def _run():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        service = LiberationService(csv_path="/nonexistent/path.csv", key_file=key_file or "liberation_key.pem")
         try:
             loop.run_until_complete(service.start())
             loop.run_forever()
@@ -87,7 +90,7 @@ def run_liberation_in_thread(key_file: str = None):
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    return thread
+    return thread, service
 
 
 def run_ipv8_mode(gui: bool = False, key_file: str = None):
@@ -102,7 +105,7 @@ def run_ipv8_mode(gui: bool = False, key_file: str = None):
 
     # Start liberation service in background
     print("Starting liberation service in background...")
-    liberation_thread = run_liberation_in_thread(key_file)
+    liberation_thread, liberation_service = run_liberation_in_thread(key_file)
 
     # Give the liberation service time to start and connect to peers
     print("Waiting for IPV8 network to initialize...")
@@ -110,7 +113,7 @@ def run_ipv8_mode(gui: bool = False, key_file: str = None):
 
     # Now start the health checker
     if gui:
-        run_gui(csv_path=None, mode="ipv8")
+        run_gui(csv_path=None, mode="ipv8", seedbox_fleet=liberation_service.seedbox_fleet)
     else:
         run(csv_path=None, mode="ipv8")
 

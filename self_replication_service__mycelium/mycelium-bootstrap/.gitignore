@@ -355,4 +355,6 @@ id_ed25519*
 .sporestack/
 *.token
 
+# Large files
+yt-api-cc-scripts/cc_video_ids.txt
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript

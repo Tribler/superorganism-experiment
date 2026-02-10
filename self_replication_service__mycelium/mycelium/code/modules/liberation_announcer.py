@@ -6,16 +6,19 @@ all seeded torrents so health checkers can discover and monitor them.
 """
 
 import asyncio
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional, Set
 
+import aiohttp
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
 from ipv8_service import IPv8
 
 from config import Config
 from utils import setup_logger
-from modules.liberation_community import LiberationCommunity, LiberatedContentPayload
+from modules.liberation_community import LiberationCommunity, LiberatedContentPayload, SeedboxInfoPayload
 from modules.seedbox import Seedbox, ContentInfo
 
 logger = setup_logger(
@@ -41,6 +44,10 @@ class LiberationAnnouncer:
 
         # Track announced content to avoid duplicates
         self.announced_infohashes: Set[str] = set()
+
+        # Seedbox info
+        self._start_time: float = time.time()
+        self._cached_public_ip: Optional[str] = None
 
     async def start(self) -> None:
         """Start the IPV8 service and liberation community."""
@@ -158,6 +165,88 @@ class LiberationAnnouncer:
                 break
             except Exception as e:
                 logger.error(f"Error in announcement loop: {e}")
+                await asyncio.sleep(interval)
+
+    def _get_git_commit_hash(self) -> str:
+        """Get short git commit hash of the running code."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=5,
+                cwd=str(Config.BASE_DIR)
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return "unknown"
+
+    async def _get_public_ip(self) -> str:
+        """Get public IP: from config if set, else auto-discover via ipify (cached)."""
+        if Config.PUBLIC_IP:
+            return Config.PUBLIC_IP
+        if self._cached_public_ip:
+            return self._cached_public_ip
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.ipify.org", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        self._cached_public_ip = await resp.text()
+                        return self._cached_public_ip
+        except Exception as e:
+            logger.warning("Failed to auto-discover public IP: %s", e)
+        return ""
+
+    def _get_disk_usage(self) -> tuple[int, int]:
+        """Get disk total and used bytes for /."""
+        usage = shutil.disk_usage("/")
+        return usage.total, usage.used
+
+    async def _create_seedbox_info_payload(self) -> SeedboxInfoPayload:
+        """Assemble a SeedboxInfoPayload with current node info."""
+        uptime = int(time.time() - self._start_time)
+        disk_total, disk_used = self._get_disk_usage()
+        public_ip = await self._get_public_ip()
+
+        return SeedboxInfoPayload(
+            friendly_name=Config.FRIENDLY_NAME,
+            public_ip=public_ip,
+            git_commit_hash=self._get_git_commit_hash(),
+            uptime_seconds=uptime,
+            disk_total_bytes=disk_total,
+            disk_used_bytes=disk_used,
+            btc_address="",      # placeholder — wallet integration later
+            btc_balance_sat=0,   # placeholder
+            vps_provider_region="",   # placeholder
+            vps_days_remaining=0      # placeholder
+        )
+
+    async def announce_seedbox_info(self) -> int:
+        """Broadcast seedbox info to all peers."""
+        if not self.community:
+            logger.warning("Cannot announce seedbox info: community not initialized")
+            return 0
+
+        payload = await self._create_seedbox_info_payload()
+        return self.community.broadcast_seedbox_info(payload)
+
+    async def seedbox_info_loop(self, interval: int = 60) -> None:
+        """Periodically broadcast seedbox info."""
+        logger.info("Starting seedbox info loop (interval: %ds)", interval)
+
+        while True:
+            try:
+                peer_count = len(self.community.get_peers()) if self.community else 0
+                if peer_count > 0:
+                    sent = await self.announce_seedbox_info()
+                    if sent > 0:
+                        logger.info("Seedbox info sent to %d peer(s)", sent)
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("Seedbox info loop cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in seedbox info loop: %s", e)
                 await asyncio.sleep(interval)
 
     def _extract_infohash(self, magnet_link: str) -> Optional[str]:

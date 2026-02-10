@@ -24,6 +24,21 @@ class LiberatedContentPayload(DataClassPayload[1]):
     timestamp: int  # Unix timestamp when content was liberated
 
 
+@dataclass
+class SeedboxInfoPayload(DataClassPayload[2]):
+    """Payload for broadcasting seedbox fleet info."""
+    friendly_name: str
+    public_ip: str
+    git_commit_hash: str
+    uptime_seconds: int
+    disk_total_bytes: int
+    disk_used_bytes: int
+    btc_address: str
+    btc_balance_sat: int
+    vps_provider_region: str
+    vps_days_remaining: int
+
+
 class LiberationCommunity(Community):
     """
     IPV8 community for announcing and discovering liberated content.
@@ -44,8 +59,12 @@ class LiberationCommunity(Community):
         # Callback for received content (optional)
         self.on_content_received_callback: Optional[Callable[[Peer, LiberatedContentPayload], None]] = None
 
-        # Register message handler
+        # Callback for received seedbox info (optional)
+        self.on_seedbox_info_callback: Optional[Callable[[Peer, SeedboxInfoPayload], None]] = None
+
+        # Register message handlers
         self.add_message_handler(LiberatedContentPayload, self.on_liberated_content)
+        self.add_message_handler(SeedboxInfoPayload, self.on_seedbox_info)
 
         self.logger.info("LiberationCommunity initialized (peer mid: %s)",
                         self.my_peer.mid.hex()[:16])
@@ -110,3 +129,49 @@ class LiberationCommunity(Community):
     ) -> None:
         """Set callback for when content is received from peers."""
         self.on_content_received_callback = callback
+
+    def broadcast_seedbox_info(self, payload: SeedboxInfoPayload) -> int:
+        """
+        Broadcast seedbox info to all connected peers (no dedup, latest wins).
+
+        Returns:
+            Number of peers the info was sent to
+        """
+        peers = self.get_peers()
+
+        if not peers:
+            self.logger.debug("No peers available to broadcast seedbox info to")
+            return 0
+
+        sent_count = 0
+        for peer in peers:
+            try:
+                self.ez_send(peer, payload)
+                sent_count += 1
+            except Exception as e:
+                self.logger.warning("Failed to send seedbox info to peer %s: %s",
+                                   peer.mid.hex()[:16], e)
+
+        if sent_count > 0:
+            self.logger.info("Broadcasted seedbox info to %d peer(s)", sent_count)
+
+        return sent_count
+
+    @lazy_wrapper(SeedboxInfoPayload)
+    def on_seedbox_info(self, peer: Peer, payload: SeedboxInfoPayload) -> None:
+        """Handle received seedbox info."""
+        self.logger.info("Received seedbox info from peer %s: %s",
+                        peer.mid.hex()[:16], payload.friendly_name)
+
+        if self.on_seedbox_info_callback:
+            try:
+                self.on_seedbox_info_callback(peer, payload)
+            except Exception as e:
+                self.logger.error("Error in seedbox info callback: %s", e)
+
+    def set_seedbox_info_callback(
+        self,
+        callback: Callable[[Peer, SeedboxInfoPayload], None]
+    ) -> None:
+        """Set callback for when seedbox info is received from peers."""
+        self.on_seedbox_info_callback = callback
