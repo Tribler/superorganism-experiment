@@ -6,7 +6,7 @@ from hashlib import sha1
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.lazy_community import lazy_wrapper
-from ipv8.messaging.payload_dataclass import DataClassPayload
+from ipv8.messaging.payload_dataclass import DataClassPayload, convert_to_payload
 from ipv8.peer import Peer
 
 @dataclass
@@ -15,6 +15,8 @@ class LiberatedContentPayload(DataClassPayload[1]):
     license: str
     magnet_link: str
     timestamp: int  # Unix timestamp when content was liberated
+
+convert_to_payload(LiberatedContentPayload, msg_id=1)
 
 
 @dataclass
@@ -30,6 +32,8 @@ class SeedboxInfoPayload(DataClassPayload[2]):
     btc_balance_sat: int
     vps_provider_region: str
     vps_days_remaining: int
+
+convert_to_payload(SeedboxInfoPayload, msg_id=2)
 
 
 class LiberationCommunitySettings(CommunitySettings):

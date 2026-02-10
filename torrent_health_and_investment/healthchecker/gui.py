@@ -19,7 +19,7 @@ class SwarmHealthGUI:
         self.checker: Optional[HealthChecker] = None
         self.running = Event()
         self.refresh_thread: Optional[Thread] = None
-        self.seedbox_fleet = seedbox_fleet or {}
+        self.seedbox_fleet = seedbox_fleet if seedbox_fleet is not None else {}
         
         # Initialize database
         init_db()
@@ -282,10 +282,6 @@ class SwarmHealthGUI:
 
             fleet_snapshot = dict(self.seedbox_fleet)
 
-            if not fleet_snapshot:
-                self.fleet_count_label.config(text="Nodes: 0")
-                self.fleet_tree.insert("", tk.END, values=("Waiting for data...", "", "", "", "", "", "", ""))
-                return
 
             self.fleet_count_label.config(text=f"Nodes: {len(fleet_snapshot)}")
 
