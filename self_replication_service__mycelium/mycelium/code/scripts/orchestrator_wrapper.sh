@@ -6,7 +6,8 @@
 # Exit code 42 indicates restart required after code update.
 # Other exit codes terminate the wrapper.
 
-ORCHESTRATOR_DIR="${MYCELIUM_BASE_DIR:-/root/mycelium}/code"
+MYCELIUM_SUBPATH="self_replication_service__mycelium/mycelium"
+ORCHESTRATOR_DIR="${MYCELIUM_BASE_DIR:-/root/mycelium}/${MYCELIUM_SUBPATH}/code"
 LOG_DIR="${MYCELIUM_LOG_DIR:-/root/logs}"
 EXIT_RESTART=42
 

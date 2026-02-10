@@ -34,6 +34,7 @@ class Deployer:
     MYCELIUM_REPO_URL = "https://github.com/Tribler/superorganism-experiment.git"
     MYCELIUM_SUBPATH = "self_replication_service__mycelium/mycelium"
     REMOTE_BASE_DIR = "/root/mycelium"
+    REMOTE_MYCELIUM_DIR = f"{REMOTE_BASE_DIR}/{MYCELIUM_SUBPATH}"
     REMOTE_VENV_DIR = "/root/mycelium/venv"
     REMOTE_CONTENT_DIR = "/root/music"
     REMOTE_LOG_DIR = "/root/logs"
@@ -266,13 +267,17 @@ class Deployer:
         branch: str = "main",
         subpath: Optional[str] = None
     ) -> None:
-        """Clone and set up mycelium repository using sparse checkout from monorepo."""
+        """Clone and set up mycelium repository using sparse checkout from monorepo.
+
+        The repo is cloned directly into REMOTE_BASE_DIR with sparse checkout,
+        keeping the git working tree intact so that 'git pull' works for auto-updates.
+        Files live at REMOTE_BASE_DIR/self_replication_service__mycelium/mycelium/.
+        """
         repo_url = repo_url or self.MYCELIUM_REPO_URL
         subpath = subpath or self.MYCELIUM_SUBPATH
 
         logger.info(f"Deploying mycelium from {repo_url} (subpath: {subpath})")
 
-        self.run_command(f"mkdir -p {self.REMOTE_BASE_DIR}")
         self.run_command(f"mkdir -p {self.REMOTE_CONTENT_DIR}")
         self.run_command(f"mkdir -p {self.REMOTE_LOG_DIR}")
         self.run_command(f"mkdir -p {self.REMOTE_DATA_DIR}")
@@ -287,26 +292,21 @@ class Deployer:
             self.run_command(f"cd {self.REMOTE_BASE_DIR} && git pull origin {branch}")
         else:
             logger.info("Cloning repository with sparse checkout...")
-            temp_dir = "/tmp/monorepo-clone"
-            self.run_command(f"rm -rf {temp_dir}")
+            self.run_command(f"rm -rf {self.REMOTE_BASE_DIR}")
             self.run_command(
-                f"git clone --filter=blob:none --sparse -b {branch} {repo_url} {temp_dir}",
+                f"git clone --filter=blob:none --sparse -b {branch} {repo_url} {self.REMOTE_BASE_DIR}",
                 timeout=120
             )
-            self.run_command(f"cd {temp_dir} && git sparse-checkout set {subpath}")
-            # Move mycelium contents to final location
-            self.run_command(f"mv {temp_dir}/{subpath}/* {self.REMOTE_BASE_DIR}/")
-            self.run_command(f"mv {temp_dir}/{subpath}/.[!.]* {self.REMOTE_BASE_DIR}/ 2>/dev/null || true")
-            # Keep .git for future pulls
-            self.run_command(f"mv {temp_dir}/.git {self.REMOTE_BASE_DIR}/.git")
-            self.run_command(f"rm -rf {temp_dir}")
+            self.run_command(
+                f"cd {self.REMOTE_BASE_DIR} && git sparse-checkout set {subpath}"
+            )
 
         logger.info("Creating virtual environment...")
         self.run_command(f"python3 -m venv {self.REMOTE_VENV_DIR}")
 
         logger.info("Installing Python requirements...")
         self.run_command(
-            f"{self.REMOTE_VENV_DIR}/bin/pip install -r {self.REMOTE_BASE_DIR}/code/requirements.txt",
+            f"{self.REMOTE_VENV_DIR}/bin/pip install -r {self.REMOTE_MYCELIUM_DIR}/code/requirements.txt",
             timeout=300
         )
 
@@ -345,13 +345,14 @@ class Deployer:
 
         self.run_command("pkill -f 'python.*main.py' || true", check=False)
 
-        wrapper_script = f"{self.REMOTE_BASE_DIR}/code/scripts/orchestrator_wrapper.sh"
+        code_dir = f"{self.REMOTE_MYCELIUM_DIR}/code"
+        wrapper_script = f"{code_dir}/scripts/orchestrator_wrapper.sh"
         self.run_command(f"chmod +x {wrapper_script}")
 
         env_string = " ".join(f"{k}='{v}'" for k, v in env_vars.items())
 
         self.run_command(
-            f"cd {self.REMOTE_BASE_DIR}/code && "
+            f"cd {code_dir} && "
             f"nohup env PATH=\"{self.REMOTE_VENV_DIR}/bin:$PATH\" {env_string} bash {wrapper_script} "
             f"< /dev/null > {self.REMOTE_LOG_DIR}/wrapper.log 2>&1 &",
             background=True
