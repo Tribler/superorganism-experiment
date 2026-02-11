@@ -277,7 +277,7 @@ class Seedbox:
         logger.info(f"Seedbox initialized with {len(self.handles)} torrents")
         logger.info(f"Content registry has {len(self.content_registry)} entries")
 
-    def run_status_loop(self, status_interval: int = 5) -> None:
+    def run_status_loop(self, status_interval: int = 60) -> None:
         """
         Run the seeding status loop (blocking).
 
