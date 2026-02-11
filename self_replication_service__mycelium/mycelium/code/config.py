@@ -39,7 +39,7 @@ class Config:
     )
     SEEDBOX_PORT_MIN: int = int(os.getenv("MYCELIUM_SEEDBOX_PORT_MIN", "6881"))
     SEEDBOX_PORT_MAX: int = int(os.getenv("MYCELIUM_SEEDBOX_PORT_MAX", "6891"))
-    SEEDBOX_STATUS_INTERVAL: int = int(os.getenv("MYCELIUM_SEEDBOX_STATUS_INTERVAL", "10"))
+    SEEDBOX_STATUS_INTERVAL: int = int(os.getenv("MYCELIUM_SEEDBOX_STATUS_INTERVAL", "60"))
 
     # Logging configuration
     LOG_LEVEL: str = os.getenv("MYCELIUM_LOG_LEVEL", "INFO")
