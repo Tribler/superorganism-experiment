@@ -301,7 +301,7 @@ class Seedbox:
             if self.session:
                 logger.info("Stopping seedbox")
 
-    def seed_content(self, status_interval: int = 5) -> None:
+    def seed_content(self, status_interval: int = 60) -> None:
         """
         Initialize and run the main seeding loop.
 
