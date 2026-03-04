@@ -1,33 +1,54 @@
-from tkinter import IntVar, StringVar, ttk
-from models.election import Election
+from __future__ import annotations
+
 import uuid
+from typing import Callable, Optional
+
+from PyQt6.QtWidgets import (
+    QWidget,
+    QLabel,
+    QLineEdit,
+    QSpinBox,
+    QPushButton,
+    QGridLayout,
+)
+
+from models.election import Election
 
 
-class CreateElectionFrame(ttk.Frame):
+class CreateElectionFrame(QWidget):
     """
-    Frame for creating an election. Calls on_create(election) on submit.
+    Widget for creating an election. Calls on_create(election) on submit.
 
     Args:
-        master: Parent widget.
         on_create: Callback function when an election is created.
+        parent: Parent widget.
     """
-    def __init__(self, master, on_create=None, **kwargs):
-        super().__init__(master, **kwargs)
+    def __init__(self, on_create: Optional[Callable[[Election], None]] = None, parent: Optional[QWidget] = None):
+        super().__init__(parent)
         self.on_create = on_create
 
-        ttk.Label(self, text="Title:").grid(column=0, row=0, sticky="WE")
-        self.title_var = StringVar()
-        ttk.Entry(self, textvariable=self.title_var).grid(column=1, row=0, sticky="WE")
+        layout = QGridLayout(self)
 
-        ttk.Label(self, text="Description:").grid(column=0, row=1, sticky="WE")
-        self.description_var = StringVar()
-        ttk.Entry(self, textvariable=self.description_var).grid(column=1, row=1, sticky="WE")
+        layout.addWidget(QLabel("Title:"), 0, 0)
+        self.title_edit = QLineEdit()
+        layout.addWidget(self.title_edit, 0, 1)
 
-        ttk.Label(self, text="Threshold:").grid(column=0, row=2, sticky="WE")
-        self.threshold_var = IntVar(value=50)
-        ttk.Entry(self, textvariable=self.threshold_var).grid(column=1, row=2, sticky="WE")
+        layout.addWidget(QLabel("Description:"), 1, 0)
+        self.description_edit = QLineEdit()
+        layout.addWidget(self.description_edit, 1, 1)
 
-        ttk.Button(self, text="Create", command=self._create).grid(column=0, row=3, columnspan=2, sticky="WE")
+        layout.addWidget(QLabel("Threshold:"), 2, 0)
+        self.threshold_spin = QSpinBox()
+        self.threshold_spin.setRange(0, 10_000_000)
+        self.threshold_spin.setValue(50)
+        layout.addWidget(self.threshold_spin, 2, 1)
+
+        self.create_btn = QPushButton("Create")
+        self.create_btn.clicked.connect(self._create)
+        layout.addWidget(self.create_btn, 3, 0, 1, 2)
+
+        layout.setColumnStretch(0, 0)
+        layout.setColumnStretch(1, 1)
 
     def _create(self):
         """
@@ -37,15 +58,15 @@ class CreateElectionFrame(ttk.Frame):
         """
         e = Election(
             id=str(uuid.uuid4()),
-            title=self.title_var.get(),
-            description=self.description_var.get(),
-            threshold=self.threshold_var.get()
+            title=self.title_edit.text(),
+            description=self.description_edit.text(),
+            threshold=int(self.threshold_spin.value())
         )
 
         if self.on_create:
             self.on_create(e)
 
         # Clear fields
-        self.title_var.set("")
-        self.description_var.set("")
-        self.threshold_var.set(50)
+        self.title_edit.setText("")
+        self.description_edit.setText("")
+        self.threshold_spin.setValue(50)

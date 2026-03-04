@@ -1,39 +1,37 @@
-from tkinter import ttk
-from typing import Callable, List
+from __future__ import annotations
+
+from typing import Callable, List, Optional
+
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem
+from PyQt6.QtCore import Qt
 
 from models.DTOs.election_with_votes import ElectionWithVotes
 
-class ElectionListFrame(ttk.Frame):
+class ElectionListFrame(QWidget):
     """
-    Frame that displays a list of elections in a treeview.
+    Widget that displays a list of elections in a treeview.
     Calls on_select(election_id) when an election is selected.
 
     Args:
-        master: Parent widget.
         on_select: Callback function when an election is selected.
+        parent: Parent widget.
     """
-    def __init__(self, master, on_select: Callable[[str], None]=None, **kwargs):
-        super().__init__(master, **kwargs)
+    def __init__(self, on_select: Optional[Callable[[str], None]] = None, parent: Optional[QWidget] = None):
+        super().__init__(parent)
         self.on_select = on_select
+        self._row_to_election_id: dict[int, str] = {}
 
-        # Let the treeview expand to fill this frame
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+        layout = QVBoxLayout(self)
 
-        self.tree = ttk.Treeview(self, columns=("id","title","creator","threshold","votes",), show="headings", selectmode="browse")
-        self.tree.heading("id", text="Election ID")
-        self.tree.heading("title", text="Title")
-        self.tree.heading("creator", text="Creator")
-        self.tree.heading("threshold", text="Threshold")
-        self.tree.heading("votes", text="Votes")
-        self.tree.grid(row=0, column=0, sticky="NSEW")
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Election ID", "Title", "Creator", "Threshold", "Votes"])
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
-        # Vertical scrollbar that also expands nicely
-        vsb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
-        vsb.grid(row=0, column=1, sticky="NS")
+        self.table.itemSelectionChanged.connect(self._on_select)
 
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
+        layout.addWidget(self.table)
 
     def load(self, elections: List[ElectionWithVotes]):
         """
@@ -42,17 +40,44 @@ class ElectionListFrame(ttk.Frame):
         :param elections: List of ElectionWithVotes to load.
         :return: None
         """
-        self.tree.delete(*self.tree.get_children())
-        for e in elections:
-            self.tree.insert("", "end", iid=e.election.id, values=(e.election.id, e.election.title, e.election.creator_id, e.election.threshold, e.votes))
+        self.table.setRowCount(0)
+        self._row_to_election_id.clear()
 
-    def _on_select(self, _evt):
+        for row_idx, e in enumerate(elections):
+            self.table.insertRow(row_idx)
+            self._row_to_election_id[row_idx] = e.election.id
+
+            values = [
+                e.election.id,
+                e.election.title,
+                str(e.election.creator_id),
+                str(e.election.threshold),
+                str(e.votes),
+            ]
+            for col_idx, val in enumerate(values):
+                item = QTableWidgetItem(val)
+                if col_idx in (3, 4):
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.table.setItem(row_idx, col_idx, item)
+
+        self.table.resizeColumnsToContents()
+
+    def _on_select(self):
         """
         Handles selection of an election in the treeview.
 
-        :param _evt: Event object (not used).
         :return: None
         """
-        sel = self.tree.selection()
-        if sel and self.on_select:
-            self.on_select(sel[0])
+        if not self.on_select:
+            return
+
+        selected = self.table.selectionModel().selectedRows()
+
+        if not selected:
+            return
+
+        row = selected[0].row()
+
+        election_id = self._row_to_election_id.get(row)
+        if election_id:
+            self.on_select(election_id)

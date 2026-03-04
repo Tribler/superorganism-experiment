@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import threading
+from pathlib import Path
+from typing import Callable, Optional
+
+from PyQt6.QtCore import QObject, pyqtSignal, Qt
 
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
 from ipv8_service import IPv8
-from pathlib import Path
-from typing import Callable, Optional
 
 from communities.ElectionCommunity import ElectionCommunity
 from config import DATA_PATH
@@ -62,6 +66,13 @@ def start_background_event_loop() -> tuple[asyncio.AbstractEventLoop, threading.
     return loop, thread
 
 # -----------------------------
+# Qt UI bridge (thread-safe)
+# -----------------------------
+class UiBridge(QObject):
+    election_added = pyqtSignal()
+    vote_added = pyqtSignal()
+
+# -----------------------------
 # App entrypoint
 # -----------------------------
 def main() -> None:
@@ -104,14 +115,30 @@ def main() -> None:
     # --- UI creation (main thread) ---
     app = Application(user, election_store, vote_store, broadcast_new_election, broadcast_new_vote)
 
-    # --- IPv8 -> UI callbacks (thread-safe via Tk) ---
+    # --- Bridge lives in GUI thread ---
+    bridge = UiBridge()
+
+    # Ensure UI refresh always runs in GUI thread
+    def refresh_elections_ui() -> None:
+        app.list_frame.load(app.repo.get_all())
+
+    def refresh_vote_ui() -> None:
+        current_id = getattr(app.detail_frame, "_current_election_id", None)
+        if current_id:
+            e = app.repo.get(current_id)
+            if e:
+                app.detail_frame.show(e)
+        app.list_frame.load(app.repo.get_all())
+
+    bridge.election_added.connect(refresh_elections_ui, type=Qt.ConnectionType.QueuedConnection)
+    bridge.vote_added.connect(refresh_vote_ui, type=Qt.ConnectionType.QueuedConnection)
+
+    # --- IPv8 -> UI callbacks (thread-safe via Qt main loop) ---
     def election_added() -> None:
-        app.root.after(0, lambda: app.list_frame.load(app.repo.get_all()))
+        bridge.election_added.emit()
 
     def vote_added() -> None:
-        election_id = app.repo.get(app.detail_frame.election_id_var.get())
-        if election_id:
-            app.root.after(0, lambda: app.detail_frame.show(app.repo.get(app.detail_frame.election_id_var.get())))
+        bridge.vote_added.emit()
 
     # --- Start IPv8 / overlay on background loop ---
     async def start_and_capture() -> None:
