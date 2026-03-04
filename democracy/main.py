@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import threading
 from pathlib import Path
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal, Qt
+from PyQt6.QtWidgets import QApplication
 
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
 from ipv8_service import IPv8
@@ -26,8 +28,7 @@ async def start_community(
     user_id: str,
     election_store: JSONStore[Election],
     vote_store: JSONStore[Vote],
-    election_added: Callable[[], None],
-    vote_added: Callable[[], None]
+    data_changed: Callable[[], None]
 ) -> ElectionCommunity:
     builder = ConfigBuilder().clear_keys().clear_overlays()
 
@@ -42,8 +43,7 @@ async def start_community(
         initialize={
             "election_store": election_store,
             "vote_store": vote_store,
-            "election_added": election_added,
-            "vote_added": vote_added
+            "data_changed": data_changed
         },
         on_start=[("on_start",)]
     )
@@ -69,8 +69,7 @@ def start_background_event_loop() -> tuple[asyncio.AbstractEventLoop, threading.
 # Qt UI bridge (thread-safe)
 # -----------------------------
 class UiBridge(QObject):
-    election_added = pyqtSignal()
-    vote_added = pyqtSignal()
+    data_changed = pyqtSignal()
 
 # -----------------------------
 # App entrypoint
@@ -113,36 +112,19 @@ def main() -> None:
         loop.call_soon_threadsafe(overlay.on_vote, vote)
 
     # --- UI creation (main thread) ---
-    app = Application(user, election_store, vote_store, broadcast_new_election, broadcast_new_vote)
+    app = QApplication(sys.argv)
+    window = Application(user, election_store, vote_store, broadcast_new_election, broadcast_new_vote)
 
     # --- Bridge lives in GUI thread ---
     bridge = UiBridge()
+    bridge.data_changed.connect(window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection)
 
-    # Ensure UI refresh always runs in GUI thread
-    def refresh_elections_ui() -> None:
-        app.list_frame.load(app.repo.get_all())
-
-    def refresh_vote_ui() -> None:
-        current_id = getattr(app.detail_frame, "_current_election_id", None)
-        if current_id:
-            e = app.repo.get(current_id)
-            if e:
-                app.detail_frame.show(e)
-        app.list_frame.load(app.repo.get_all())
-
-    bridge.election_added.connect(refresh_elections_ui, type=Qt.ConnectionType.QueuedConnection)
-    bridge.vote_added.connect(refresh_vote_ui, type=Qt.ConnectionType.QueuedConnection)
-
-    # --- IPv8 -> UI callbacks (thread-safe via Qt main loop) ---
-    def election_added() -> None:
-        bridge.election_added.emit()
-
-    def vote_added() -> None:
-        bridge.vote_added.emit()
+    def data_changed() -> None:
+        bridge.data_changed.emit()
 
     # --- Start IPv8 / overlay on background loop ---
     async def start_and_capture() -> None:
-        overlay = await start_community(user.id, election_store, vote_store, election_added, vote_added)
+        overlay = await start_community(user.id, election_store, vote_store, data_changed)
         community_ref["overlay"] = overlay
 
     fut = asyncio.run_coroutine_threadsafe(start_and_capture(), loop)
@@ -158,7 +140,8 @@ def main() -> None:
 
     # --- Run UI ---
     try:
-        app.run()
+        window.show()
+        sys.exit(app.exec())
     finally:
         # Stop the background loop when the application exits
         loop.call_soon_threadsafe(loop.stop)

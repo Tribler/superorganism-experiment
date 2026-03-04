@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Callable, List, Optional
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from models.DTOs.election_with_votes import ElectionWithVotes
 
-class ElectionListFrame(QWidget):
+class ElectionListWidget(QWidget):
+    selected = pyqtSignal(str)
+
     """
     Widget that displays a list of elections in a treeview.
     Calls on_select(election_id) when an election is selected.
@@ -16,9 +18,8 @@ class ElectionListFrame(QWidget):
         on_select: Callback function when an election is selected.
         parent: Parent widget.
     """
-    def __init__(self, on_select: Optional[Callable[[str], None]] = None, parent: Optional[QWidget] = None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.on_select = on_select
         self._row_to_election_id: dict[int, str] = {}
 
         layout = QVBoxLayout(self)
@@ -68,11 +69,7 @@ class ElectionListFrame(QWidget):
 
         :return: None
         """
-        if not self.on_select:
-            return
-
         selected = self.table.selectionModel().selectedRows()
-
         if not selected:
             return
 
@@ -80,4 +77,4 @@ class ElectionListFrame(QWidget):
 
         election_id = self._row_to_election_id.get(row)
         if election_id:
-            self.on_select(election_id)
+            self.selected.emit(str(election_id))

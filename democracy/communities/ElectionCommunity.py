@@ -32,8 +32,7 @@ class ElectionCommunity(Community):
 
         self.election_store: JSONStore[Election] = settings.election_store
         self.vote_store: JSONStore[Vote] = settings.vote_store
-        self.election_added = settings.election_added
-        self.vote_added = settings.vote_added
+        self.data_changed = settings.data_changed
 
         # Register the message handlers for messages.
         self.add_message_handler(ElectionMessage, self.on_election_message)
@@ -118,7 +117,7 @@ class ElectionCommunity(Community):
         :param payload: Received election message.
         :return: None
         """
-        self._handle_incoming_message(peer, payload, store=self.election_store, on_added=self.election_added)
+        self._handle_incoming_message(peer, payload, store=self.election_store, on_added=self.data_changed)
 
     def on_create_election(self, election: Election) -> None:
         """
@@ -138,7 +137,7 @@ class ElectionCommunity(Community):
         :param payload: Received vote message.
         :return: None
         """
-        self._handle_incoming_message(peer, payload, store=self.vote_store, on_added=self.vote_added)
+        self._handle_incoming_message(peer, payload, store=self.vote_store, on_added=self.data_changed)
 
     def on_vote(self, vote: Vote) -> None:
         """

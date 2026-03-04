@@ -4,13 +4,15 @@ import uuid
 from typing import Callable, Optional
 
 from PyQt6.QtWidgets import QWidget, QLabel, QPushButton, QGridLayout
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from models.DTOs.election_with_votes import ElectionWithVotes
 from models.vote import Vote
 
 
-class ElectionDetailFrame(QWidget):
+class ElectionDetailWidget(QWidget):
+    approved = pyqtSignal(str)
+
     """
     Displays a single election's details.
     Calls on_vote(vote) when the Approve button is clicked.
@@ -23,7 +25,7 @@ class ElectionDetailFrame(QWidget):
         super().__init__(parent)
         self.on_vote = on_vote
 
-        self._current_election_id: Optional[str] = None
+        self.current_election_id: Optional[str] = None
 
         layout = QGridLayout(self)
 
@@ -80,7 +82,7 @@ class ElectionDetailFrame(QWidget):
         :param e: ElectionWithVotes to display.
         :return: None
         """
-        self._current_election_id = e.election.id
+        self.current_election_id = e.election.id
 
         self.election_id_lbl.setText(e.election.id)
         self.creator_lbl.setText(str(e.election.creator_id))
@@ -98,13 +100,5 @@ class ElectionDetailFrame(QWidget):
 
         :return: None
         """
-        if not self._current_election_id:
-            return
-
-        v = Vote(
-            id=str(uuid.uuid4()),
-            voter_id="",  # will be overwritten in Application._on_vote
-            election_id=self._current_election_id,
-        )
-        if self.on_vote:
-            self.on_vote(v)
+        if self.current_election_id:
+            self.approved.emit(self.current_election_id)

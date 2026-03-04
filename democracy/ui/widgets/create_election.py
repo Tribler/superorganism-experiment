@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Callable, Optional
 
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget,
     QLabel,
@@ -15,7 +16,9 @@ from PyQt6.QtWidgets import (
 from models.election import Election
 
 
-class CreateElectionFrame(QWidget):
+class CreateElectionWidget(QWidget):
+    created = pyqtSignal(Election)
+
     """
     Widget for creating an election. Calls on_create(election) on submit.
 
@@ -23,9 +26,8 @@ class CreateElectionFrame(QWidget):
         on_create: Callback function when an election is created.
         parent: Parent widget.
     """
-    def __init__(self, on_create: Optional[Callable[[Election], None]] = None, parent: Optional[QWidget] = None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.on_create = on_create
 
         layout = QGridLayout(self)
 
@@ -63,8 +65,7 @@ class CreateElectionFrame(QWidget):
             threshold=int(self.threshold_spin.value())
         )
 
-        if self.on_create:
-            self.on_create(e)
+        self.created.emit(e)
 
         # Clear fields
         self.title_edit.setText("")
