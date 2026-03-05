@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "LINEAR on letor4-mq2008",
+  "version": "1.0.0",
+  "created": "2026-02-05T13:29:34.917911+00:00",
+  "author": "",
+  "description": "Trained on letor4-mq2008 fold 1",
+  "predict_script": "pdgd_handler.py"
+}

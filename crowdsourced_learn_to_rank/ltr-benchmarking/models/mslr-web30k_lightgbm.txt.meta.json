@@ -1,0 +1,9 @@
+{
+  "type": "lightgbm",
+  "name": "LIGHTGBM on mslr-web30k",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:32:47.795996+00:00",
+  "author": "",
+  "description": "Trained on mslr-web30k fold 1",
+  "predict_script": ""
+}

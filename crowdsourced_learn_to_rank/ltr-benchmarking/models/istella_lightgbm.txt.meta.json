@@ -1,0 +1,9 @@
+{
+  "type": "lightgbm",
+  "name": "LIGHTGBM on istella",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:48:58.804282+00:00",
+  "author": "",
+  "description": "Trained on istella fold 1",
+  "predict_script": ""
+}

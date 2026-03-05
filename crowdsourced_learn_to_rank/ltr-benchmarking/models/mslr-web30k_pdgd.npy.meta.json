@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "PDGD on mslr-web30k",
+  "version": "1.0.0",
+  "created": "2026-02-06T13:04:43.256415+00:00",
+  "author": "",
+  "description": "Trained on mslr-web30k fold 1",
+  "predict_script": "pdgd_handler.py"
+}

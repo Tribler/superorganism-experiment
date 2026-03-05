@@ -1,0 +1,9 @@
+{
+  "type": "lightgbm",
+  "name": "LIGHTGBM on aol4foltr",
+  "version": "1.0.0",
+  "created": "2026-02-19T11:00:01.776610+00:00",
+  "author": "",
+  "description": "Trained on aol4foltr fold 1",
+  "predict_script": ""
+}

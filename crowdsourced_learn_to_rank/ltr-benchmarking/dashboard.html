@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LTR MAB Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #e0e0e0; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 20px; }
+h1 { color: #0f0; font-size: 18px; margin-bottom: 4px; }
+h2 { color: #0af; font-size: 15px; margin: 16px 0 8px; }
+.header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+.status { color: #888; font-size: 12px; }
+.phase { color: #ff0; font-weight: bold; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.card { background: #111; border: 1px solid #333; border-radius: 4px; padding: 12px; }
+.card-title { color: #0af; font-size: 13px; margin-bottom: 8px; font-weight: bold; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: #888; padding: 4px 8px; border-bottom: 1px solid #333; }
+td { padding: 4px 8px; border-bottom: 1px solid #1a1a1a; }
+.active { color: #0f0; }
+.excluded { color: #f44; text-decoration: line-through; }
+.best { color: #ff0; font-weight: bold; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+#events { background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px; height: 200px; overflow-y: auto; font-size: 12px; line-height: 1.6; }
+.evt-time { color: #666; }
+.evt-exclusion { color: #f44; }
+.evt-gossip { color: #0af; }
+.evt-round { color: #ff0; }
+.evt-info { color: #888; }
+.oracle { font-size: 12px; color: #888; margin-bottom: 12px; }
+.oracle span { color: #0f0; margin-right: 16px; }
+#leaderboard { margin-bottom: 16px; }
+
+/* Config form */
+#setup { max-width: 480px; margin: 60px auto; }
+#setup h2 { color: #0f0; font-size: 16px; margin-bottom: 16px; }
+.form-row { margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+.form-row label { width: 140px; color: #888; font-size: 13px; }
+.form-row select, .form-row input { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 3px; padding: 6px 10px; font-family: inherit; font-size: 13px; width: 200px; }
+.form-row select:focus, .form-row input:focus { border-color: #0af; outline: none; }
+#start-btn { background: #0f0; color: #000; border: none; padding: 8px 24px; font-family: inherit; font-size: 14px; font-weight: bold; border-radius: 3px; cursor: pointer; margin-top: 8px; }
+#start-btn:hover { background: #0c0; }
+#start-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+#setup-status { color: #ff0; font-size: 12px; margin-top: 12px; }
+
+/* Charts */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-card { background: #111; border: 1px solid #333; border-radius: 4px; padding: 12px; }
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card canvas { width: 100% !important; height: 250px !important; }
+
+/* Experiment view */
+#experiment { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Setup form (shown when idle) -->
+<div id="setup">
+  <h1>LTR Multi-Armed Bandit Dashboard</h1>
+  <h2>Configure Experiment</h2>
+  <div class="form-row">
+    <label>Dataset</label>
+    <select id="f-dataset"><option>loading...</option></select>
+  </div>
+  <div class="form-row">
+    <label>Peers</label>
+    <input id="f-peers" type="number" value="5" min="2" max="20">
+  </div>
+  <div class="form-row">
+    <label>Algorithm</label>
+    <select id="f-algorithm">
+      <option value="ucb1">UCB1</option>
+      <option value="thompson">Thompson Sampling</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>Metric</label>
+    <select id="f-metric">
+      <option value="ndcg">NDCG</option>
+      <option value="mrr">MRR</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>Gossip</label>
+    <input id="f-gossip" type="checkbox" checked style="width:auto">
+    <span style="color:#888;font-size:12px">Enable stat sharing between peers</span>
+  </div>
+  <div class="form-row">
+    <label>Rounds</label>
+    <input id="f-rounds" type="number" value="5" min="1" max="50">
+  </div>
+  <div class="form-row">
+    <label>Queries / peer / round</label>
+    <input id="f-queries" type="number" value="100" min="10" max="10000" step="10">
+  </div>
+  <div class="form-row">
+    <label>Hot-swap round</label>
+    <input id="f-hotswap" type="number" value="3" min="0" max="50">
+    <span style="color:#888;font-size:12px">0 = disabled, else XGBoost proposed at this round</span>
+  </div>
+  <button id="start-btn" onclick="startExperiment()">Start Experiment</button>
+  <div id="setup-status"></div>
+</div>
+
+<!-- Experiment view (shown when running/finished) -->
+<div id="experiment">
+  <div class="header">
+    <div>
+      <h1>LTR Multi-Armed Bandit Dashboard</h1>
+      <div id="config" class="status"></div>
+    </div>
+    <div>
+      <span class="status">Round <span id="round">-</span> | <span class="phase" id="phase">-</span> | <span id="elapsed">0</span>s</span>
+    </div>
+  </div>
+
+  <div id="oracle" class="oracle"></div>
+
+  <div id="leaderboard">
+    <h2>Model Leaderboard (aggregated across all peers)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Model</th><th>Status</th><th class="num">Total Pulls</th><th class="num">Mean Reward</th><th class="num">Peers Using</th></tr></thead>
+      <tbody id="lb-body"></tbody>
+    </table>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="card-title">Cumulative Reward vs Oracle</div>
+      <canvas id="chart-reward"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Mean Reward per Arm</div>
+      <canvas id="chart-arm-reward"></canvas>
+    </div>
+    <div class="chart-card wide">
+      <div class="card-title">Arm Pull Distribution</div>
+      <canvas id="chart-pulls"></canvas>
+    </div>
+  </div>
+
+  <h2>Peer Details</h2>
+  <div class="grid" id="peers-grid"></div>
+
+  <h2>Event Log</h2>
+  <div id="events"></div>
+</div>
+
+<script>
+let lastEventTime = 0;
+let experimentStarted = false;
+let lastHistoryLen = 0;
+
+// Chart instances
+let chartReward = null;
+let chartArmReward = null;
+let chartPulls = null;
+
+// Consistent arm colors
+const ARM_COLORS = [
+  '#00ff00', '#00aaff', '#ff4444', '#ffff00',
+  '#ff00ff', '#00ffff', '#ff8800', '#88ff00',
+];
+let armColorMap = {};
+function getArmColor(name) {
+  if (!(name in armColorMap)) {
+    armColorMap[name] = ARM_COLORS[Object.keys(armColorMap).length % ARM_COLORS.length];
+  }
+  return armColorMap[name];
+}
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 300 },
+  plugins: {
+    legend: { labels: { color: '#888', font: { family: 'Consolas, Monaco, monospace', size: 11 } } },
+  },
+  scales: {
+    x: { ticks: { color: '#666' }, grid: { color: '#222' } },
+    y: { ticks: { color: '#666' }, grid: { color: '#222' } },
+  },
+};
+
+function initCharts() {
+  const ctxReward = document.getElementById('chart-reward').getContext('2d');
+  chartReward = new Chart(ctxReward, {
+    type: 'line',
+    data: { labels: [], datasets: [] },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, title: { display: false } },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, title: { display: true, text: 'Round', color: '#666' } },
+        y: { ...CHART_DEFAULTS.scales.y, title: { display: true, text: 'Cumulative Score@10', color: '#666' } },
+      },
+    },
+  });
+
+  const ctxArm = document.getElementById('chart-arm-reward').getContext('2d');
+  chartArmReward = new Chart(ctxArm, {
+    type: 'line',
+    data: { labels: [], datasets: [] },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, title: { display: false } },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, title: { display: true, text: 'Round', color: '#666' } },
+        y: { ...CHART_DEFAULTS.scales.y, title: { display: true, text: 'Mean Reward', color: '#666' } },
+      },
+    },
+  });
+
+  const ctxPulls = document.getElementById('chart-pulls').getContext('2d');
+  chartPulls = new Chart(ctxPulls, {
+    type: 'bar',
+    data: { labels: [], datasets: [] },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, title: { display: false } },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, stacked: true, title: { display: true, text: 'Round', color: '#666' } },
+        y: { ...CHART_DEFAULTS.scales.y, stacked: true, title: { display: true, text: 'Pulls', color: '#666' } },
+      },
+    },
+  });
+}
+
+function updateCharts(history) {
+  if (!history || history.length === 0 || history.length === lastHistoryLen) return;
+  lastHistoryLen = history.length;
+
+  const rounds = history.map(h => 'R' + h.round);
+
+  // Collect all arm names across all rounds
+  const allArms = new Set();
+  for (const h of history) {
+    for (const name of Object.keys(h.arm_pulls)) allArms.add(name);
+  }
+  const armNames = [...allArms].sort();
+
+  // 1. Cumulative Reward vs Oracle
+  chartReward.data.labels = rounds;
+  chartReward.data.datasets = [
+    {
+      label: 'Bandit (actual)',
+      data: history.map(h => h.cumulative_reward),
+      borderColor: '#00ff00',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.3,
+    },
+    {
+      label: 'Oracle (best model)',
+      data: history.map(h => h.oracle_cumulative),
+      borderColor: '#ff4444',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [6, 3],
+      pointRadius: 3,
+      tension: 0.3,
+    },
+  ];
+  chartReward.update();
+
+  // 2. Mean Reward per Arm
+  // Find the introduction round index for each arm (first round it appears)
+  const armIntroIndex = {};
+  for (const name of armNames) {
+    for (let i = 0; i < history.length; i++) {
+      if ((history[i].new_arms || []).includes(name)) {
+        armIntroIndex[name] = i;
+        break;
+      }
+    }
+  }
+
+  chartArmReward.data.labels = rounds;
+  chartArmReward.data.datasets = armNames.map(name => {
+    const introIdx = armIntroIndex[name];
+    const pointRadius = history.map((_, i) => i === introIdx ? 10 : 3);
+    const pointStyle = history.map((_, i) => i === introIdx ? 'triangle' : 'circle');
+    const pointBg = history.map((_, i) => i === introIdx ? '#ffffff' : getArmColor(name));
+    const pointBorder = history.map((_, i) => i === introIdx ? getArmColor(name) : getArmColor(name));
+    return {
+      label: introIdx !== undefined ? name + ' ▲ introduced R' + history[introIdx].round : name,
+      data: history.map(h => h.arm_mean_reward[name] ?? null),
+      borderColor: getArmColor(name),
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius,
+      pointStyle,
+      pointBackgroundColor: pointBg,
+      pointBorderColor: pointBorder,
+      pointBorderWidth: history.map((_, i) => i === introIdx ? 2 : 1),
+      tension: 0.3,
+      spanGaps: false,
+    };
+  });
+  chartArmReward.update();
+
+  // 3. Arm Pull Distribution (stacked bar)
+  // Show per-round pulls (delta from previous round)
+  chartPulls.data.labels = rounds;
+  chartPulls.data.datasets = armNames.map(name => ({
+    label: name,
+    data: history.map((h, i) => {
+      const cur = h.arm_pulls[name] || 0;
+      const prev = i > 0 ? (history[i - 1].arm_pulls[name] || 0) : 0;
+      return cur - prev;
+    }),
+    backgroundColor: getArmColor(name) + 'cc',
+    borderColor: getArmColor(name),
+    borderWidth: 1,
+  }));
+  chartPulls.update();
+}
+
+// Load available datasets on page load
+async function loadDatasets() {
+  try {
+    const datasets = await fetch('/api/datasets').then(r => r.json());
+    const sel = document.getElementById('f-dataset');
+    sel.innerHTML = datasets.map(d => `<option value="${d}">${d}</option>`).join('');
+  } catch (e) {
+    document.getElementById('f-dataset').innerHTML = '<option>error loading</option>';
+  }
+}
+
+async function startExperiment() {
+  const btn = document.getElementById('start-btn');
+  const status = document.getElementById('setup-status');
+  btn.disabled = true;
+  status.textContent = 'Starting experiment...';
+
+  const body = {
+    dataset: document.getElementById('f-dataset').value,
+    peers: parseInt(document.getElementById('f-peers').value),
+    rounds: parseInt(document.getElementById('f-rounds').value),
+    queries: parseInt(document.getElementById('f-queries').value),
+    gossip: document.getElementById('f-gossip').checked,
+    hotswap_round: parseInt(document.getElementById('f-hotswap').value),
+    algorithm: document.getElementById('f-algorithm').value,
+    metric: document.getElementById('f-metric').value,
+  };
+
+  // Reset chart state
+  lastHistoryLen = 0;
+  armColorMap = {};
+
+  try {
+    const res = await fetch('/api/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) {
+      status.textContent = 'Error: ' + data.error;
+      btn.disabled = false;
+      return;
+    }
+    experimentStarted = true;
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('experiment').style.display = 'block';
+    initCharts();
+  } catch (e) {
+    status.textContent = 'Failed to start: ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+async function poll() {
+  try {
+    const [snap, evtsRes] = await Promise.all([
+      fetch('/api').then(r => r.json()),
+      fetch('/api/events?since=' + lastEventTime).then(r => r.json()),
+    ]);
+
+    // Auto-switch to experiment view if running
+    if (snap.phase !== 'idle' && !experimentStarted) {
+      experimentStarted = true;
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('experiment').style.display = 'block';
+      initCharts();
+    }
+
+    if (!experimentStarted) return;
+
+    // Header
+    document.getElementById('round').textContent = snap.round;
+    document.getElementById('phase').textContent = snap.phase;
+    document.getElementById('elapsed').textContent = snap.elapsed;
+
+    if (snap.config.dataset) {
+      const algo = (snap.config.algorithm || 'ucb1').toUpperCase();
+      const met = (snap.config.metric || 'ndcg').toUpperCase();
+      document.getElementById('config').textContent =
+        `${snap.config.dataset} | ${algo} | ${met} | ${snap.config.num_peers} peers | ${snap.config.num_rounds} rounds | ${snap.config.queries_per_round} queries/peer/round`;
+    }
+
+    // Oracle
+    if (snap.oracle && Object.keys(snap.oracle).length > 0) {
+      document.getElementById('oracle').innerHTML = 'Oracle: ' +
+        Object.entries(snap.oracle).map(([m, v]) => `<span>${m}: ${v.toFixed(4)}</span>`).join('');
+    }
+
+    // Charts
+    updateCharts(snap.round_history);
+
+    // Leaderboard
+    const armAgg = {};
+    for (const p of snap.peers) {
+      for (const [name, arm] of Object.entries(p.arms)) {
+        if (!armAgg[name]) armAgg[name] = { pulls: 0, reward: 0, status: arm.status, peersUsing: 0 };
+        armAgg[name].pulls += arm.pulls;
+        armAgg[name].reward += arm.reward * arm.pulls;
+        if (arm.status === 'active') armAgg[name].peersUsing++;
+        if (arm.status === 'excluded') armAgg[name].status = 'excluded';
+      }
+    }
+    const lb = Object.entries(armAgg)
+      .map(([name, a]) => ({ name, pulls: a.pulls, reward: a.pulls > 0 ? a.reward / a.pulls : 0, status: a.status, peersUsing: a.peersUsing }))
+      .sort((a, b) => b.reward - a.reward);
+
+    const bestName = lb.length > 0 && lb[0].status === 'active' ? lb[0].name : '';
+    document.getElementById('lb-body').innerHTML = lb.map((m, i) => {
+      const cls = m.status === 'excluded' ? 'excluded' : (m.name === bestName ? 'best' : 'active');
+      return `<tr class="${cls}"><td>${i+1}</td><td>${m.name}</td><td>${m.status}</td><td class="num">${m.pulls}</td><td class="num">${m.reward.toFixed(4)}</td><td class="num">${m.peersUsing}</td></tr>`;
+    }).join('');
+
+    // Peer cards
+    const grid = document.getElementById('peers-grid');
+    grid.innerHTML = snap.peers.map(p => {
+      const arms = Object.entries(p.arms)
+        .sort(([,a],[,b]) => b.reward - a.reward)
+        .map(([name, a]) => {
+          const cls = a.status === 'excluded' ? 'excluded' : (name === p.best ? 'best' : '');
+          return `<tr class="${cls}"><td>${name}</td><td class="num">${a.pulls}</td><td class="num">${a.reward.toFixed(4)}</td></tr>`;
+        }).join('');
+
+      const metricLabel = (snap.config.metric || 'ndcg').toUpperCase();
+      const scores = Object.entries(p.scores).map(([k, v]) => `@${k}=${v}`).join(' ');
+
+      return `<div class="card">
+        <div class="card-title">Peer ${p.id} <span style="color:#888;font-weight:normal">(${p.queries} queries, ${p.active.length} active)</span></div>
+        <div style="color:#888;font-size:12px;margin-bottom:6px">${metricLabel}: ${scores}</div>
+        <table><thead><tr><th>Arm</th><th class="num">Pulls</th><th class="num">Reward</th></tr></thead><tbody>${arms}</tbody></table>
+      </div>`;
+    }).join('');
+
+    // Events
+    if (evtsRes.length > 0) {
+      const el = document.getElementById('events');
+      for (const e of evtsRes) {
+        const cls = 'evt-' + e.kind;
+        el.innerHTML += `<div><span class="evt-time">[${e.t.toFixed(1)}s]</span> <span class="${cls}">${e.msg}</span></div>`;
+        lastEventTime = Math.max(lastEventTime, e.t);
+      }
+      el.scrollTop = el.scrollHeight;
+    }
+  } catch (err) {
+    // server not ready yet
+  }
+}
+
+loadDatasets();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

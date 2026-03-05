@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "PDGD on aol4foltr",
+  "version": "1.0.0",
+  "created": "2026-02-06T13:16:42.183839+00:00",
+  "author": "",
+  "description": "Trained on aol4foltr fold 1",
+  "predict_script": "pdgd_handler.py"
+}

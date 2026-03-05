@@ -1,0 +1,9 @@
+{
+  "type": "xgboost",
+  "name": "XGBOOST on mslr-web30k",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:30:55.024448+00:00",
+  "author": "",
+  "description": "Trained on mslr-web30k fold 1",
+  "predict_script": ""
+}

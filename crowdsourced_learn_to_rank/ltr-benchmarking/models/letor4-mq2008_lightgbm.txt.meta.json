@@ -1,0 +1,9 @@
+{
+  "type": "lightgbm",
+  "name": "LIGHTGBM on letor4-mq2008",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:48:59.589039+00:00",
+  "author": "",
+  "description": "Trained on letor4-mq2008 fold 1",
+  "predict_script": ""
+}

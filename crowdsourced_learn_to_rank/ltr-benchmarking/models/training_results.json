@@ -1,0 +1,76 @@
+{
+  "timestamp": "2026-02-19T11:00:01.787688+00:00",
+  "datasets": [
+    "mslr-web10k",
+    "mslr-web30k",
+    "istella",
+    "letor4-mq2008",
+    "aol4foltr"
+  ],
+  "models": [
+    "xgboost",
+    "lightgbm"
+  ],
+  "results": [
+    {
+      "dataset": "mslr-web10k",
+      "model": "xgboost",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\mslr-web10k_xgboost.json",
+      "status": "success"
+    },
+    {
+      "dataset": "mslr-web10k",
+      "model": "lightgbm",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\mslr-web10k_lightgbm.txt",
+      "status": "success"
+    },
+    {
+      "dataset": "mslr-web30k",
+      "model": "xgboost",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\mslr-web30k_xgboost.json",
+      "status": "success"
+    },
+    {
+      "dataset": "mslr-web30k",
+      "model": "lightgbm",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\mslr-web30k_lightgbm.txt",
+      "status": "success"
+    },
+    {
+      "dataset": "istella",
+      "model": "xgboost",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\istella_xgboost.json",
+      "status": "success"
+    },
+    {
+      "dataset": "istella",
+      "model": "lightgbm",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\istella_lightgbm.txt",
+      "status": "success"
+    },
+    {
+      "dataset": "letor4-mq2008",
+      "model": "xgboost",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\letor4-mq2008_xgboost.json",
+      "status": "success"
+    },
+    {
+      "dataset": "letor4-mq2008",
+      "model": "lightgbm",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\letor4-mq2008_lightgbm.txt",
+      "status": "success"
+    },
+    {
+      "dataset": "aol4foltr",
+      "model": "xgboost",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\aol4foltr_xgboost.json",
+      "status": "success"
+    },
+    {
+      "dataset": "aol4foltr",
+      "model": "lightgbm",
+      "path": "c:\\Users\\Andrei\\msc-thesis\\ltr-benchmarking\\models\\aol4foltr_lightgbm.txt",
+      "status": "success"
+    }
+  ]
+}

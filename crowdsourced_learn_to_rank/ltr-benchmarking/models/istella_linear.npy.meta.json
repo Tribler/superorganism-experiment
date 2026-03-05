@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "LINEAR on istella",
+  "version": "1.0.0",
+  "created": "2026-02-05T13:29:34.510856+00:00",
+  "author": "",
+  "description": "Trained on istella fold 1",
+  "predict_script": "pdgd_handler.py"
+}

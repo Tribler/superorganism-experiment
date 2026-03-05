@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "PDGD on istella",
+  "version": "1.0.0",
+  "created": "2026-02-06T13:10:42.040643+00:00",
+  "author": "",
+  "description": "Trained on istella fold 1",
+  "predict_script": "pdgd_handler.py"
+}

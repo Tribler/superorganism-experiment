@@ -1,0 +1,9 @@
+{
+  "type": "xgboost",
+  "name": "XGBOOST on aol4foltr",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:54:29.324446+00:00",
+  "author": "",
+  "description": "Trained on aol4foltr fold 1",
+  "predict_script": ""
+}

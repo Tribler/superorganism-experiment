@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "name": "LINEAR on mslr-web10k",
+  "version": "1.0.0",
+  "created": "2026-02-05T13:22:18.141862+00:00",
+  "author": "",
+  "description": "Trained on mslr-web10k fold 1",
+  "predict_script": "pdgd_handler.py"
+}

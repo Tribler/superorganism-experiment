@@ -1,0 +1,10 @@
+cryptography
+libnacl
+aiohttp
+aiohttp_apispec>=3.0.0b1
+pyOpenSSL
+pyasn1
+marshmallow
+typing-extensions
+packaging
+apispec>=6.0.0

@@ -1,0 +1,9 @@
+{
+  "type": "xgboost",
+  "name": "XGBOOST on istella",
+  "version": "1.0.0",
+  "created": "2026-02-19T10:41:45.715657+00:00",
+  "author": "",
+  "description": "Trained on istella fold 1",
+  "predict_script": ""
+}
