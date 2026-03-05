@@ -18,58 +18,9 @@ from config import DATA_PATH
 from models.election import Election
 from models.person import Person
 from models.vote import Vote
+from network.ipv8_thread import IPv8Thread
 from storage.json_store import JSONStore
 from ui.app import Application
-
-# -----------------------------
-# IPv8 startup / community setup
-# -----------------------------
-async def start_community(
-    user_id: str,
-    election_store: JSONStore[Election],
-    vote_store: JSONStore[Vote],
-    data_changed: Callable[[], None]
-) -> ElectionCommunity:
-    builder = ConfigBuilder().clear_keys().clear_overlays()
-
-    os.makedirs("keys", exist_ok=True)
-    builder.add_key("my peer", "curve25519", f"keys/{user_id}.pem")
-
-    builder.add_overlay(
-        overlay_class="ElectionCommunity",
-        key_alias="my peer",
-        walkers=[WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})],
-        bootstrappers=default_bootstrap_defs,
-        initialize={
-            "election_store": election_store,
-            "vote_store": vote_store,
-            "data_changed": data_changed
-        },
-        on_start=[("on_start",)]
-    )
-
-    ipv8 = IPv8(builder.finalize(), extra_communities={"ElectionCommunity": ElectionCommunity})
-    await ipv8.start()
-
-    # Return the actual overlay instance
-    return next(o for o in ipv8.overlays if isinstance(o, ElectionCommunity))
-
-def start_background_event_loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
-    loop = asyncio.new_event_loop()
-
-    def _loop_thread() -> None:
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
-
-    thread = threading.Thread(target=_loop_thread, daemon=True)
-    thread.start()
-    return loop, thread
-
-# -----------------------------
-# Qt UI bridge (thread-safe)
-# -----------------------------
-class UiBridge(QObject):
-    data_changed = pyqtSignal()
 
 # -----------------------------
 # App entrypoint
@@ -90,53 +41,27 @@ def main() -> None:
         dictify=lambda v: v.to_dict()
     )
 
-    # --- Shared state (overlay becomes available after IPv8 starts) ---
-    community_ref: dict[str, Optional[ElectionCommunity]] = {"overlay": None}
-
-    # --- IPv8 background loop ---
-    loop, thread = start_background_event_loop()
-
-    # --- UI callbacks ---
-    def broadcast_new_election(election: Election) -> None:
-        overlay: Optional[ElectionCommunity] = community_ref["overlay"]
-        if overlay is None:
-            # Community not ready yet; could queue these if needed.
-            return
-        loop.call_soon_threadsafe(overlay.on_create_election, election)
-
-    def broadcast_new_vote(vote: Vote) -> None:
-        overlay: Optional[ElectionCommunity] = community_ref["overlay"]
-        if overlay is None:
-            # Community not ready yet; could queue these if needed.
-            return
-        loop.call_soon_threadsafe(overlay.on_vote, vote)
-
     # --- UI creation (main thread) ---
     app = QApplication(sys.argv)
+
+    worker: Optional[IPv8Thread] = None
+
+    def broadcast_new_election(e: Election) -> None:
+        if worker is not None:
+            worker.broadcastElection.emit(e)
+
+    def broadcast_new_vote(v: Vote) -> None:
+        if worker is not None:
+            worker.broadcastVote.emit(v)
+
     window = Application(user, election_store, vote_store, broadcast_new_election, broadcast_new_vote)
 
-    # --- Bridge lives in GUI thread ---
-    bridge = UiBridge()
-    bridge.data_changed.connect(window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection)
-
-    def data_changed() -> None:
-        bridge.data_changed.emit()
-
-    # --- Start IPv8 / overlay on background loop ---
-    async def start_and_capture() -> None:
-        overlay = await start_community(user.id, election_store, vote_store, data_changed)
-        community_ref["overlay"] = overlay
-
-    fut = asyncio.run_coroutine_threadsafe(start_and_capture(), loop)
-
-    def _done_callback(f: asyncio.Future[None]) -> None:
-        try:
-            f.result(timeout=10)  # will re-raise any exception from the coroutine
-        except Exception as e:
-            print("IPv8 startup did not complete:", repr(e))
-            raise
-
-    fut.add_done_callback(_done_callback)
+    # Start IPv8 in QThread
+    worker = IPv8Thread(user.id, election_store, vote_store)
+    worker.dataChanged.connect(window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection)
+    worker.error.connect(lambda msg: print("IPv8 error:", msg), type=Qt.ConnectionType.QueuedConnection)
+    worker.startedOk.connect(lambda: print("IPv8 started"), type=Qt.ConnectionType.QueuedConnection)
+    worker.start()
 
     # --- Run UI ---
     try:
@@ -144,8 +69,9 @@ def main() -> None:
         sys.exit(app.exec())
     finally:
         # Stop the background loop when the application exits
-        loop.call_soon_threadsafe(loop.stop)
-        thread.join(timeout=1)
+        if worker is not None:
+            worker.stop()
+            worker.wait(1000)
 
 if __name__ == "__main__":
     main()
