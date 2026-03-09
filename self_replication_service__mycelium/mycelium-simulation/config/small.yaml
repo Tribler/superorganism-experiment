@@ -1,22 +1,22 @@
 economy:
-  seed_capital: 10000             # capital for genesis node
+  seed_capital: 4000             # capital of genesis node
   rent_per_cycle: 1000            # currecny deducted per tick
-  spawn_threshold_cycles: 5       # need N ticks worth of rent to consider spawning - min caution baseline
-  min_reserve_cycles: 3           # keep N ticks of runway before spawning - min caution baseline
+  spawn_threshold_cycles: 5       # need N ticks worth of rent to consider spawning - min caution BASELINE
+  min_reserve_cycles: 3           # keep minimum N ticks of runway after spawning - min caution BASELINE
   inheritance_ratio: 0.4          # fraction of excess given to child
-  caution_variance: 0.5           # nodes can be up to 100% more cautious
-  caution_heritability: 0.7       # fraction of parent's caution passed to child
+  caution_variance: 1.0           # nodes can be up to 100% more cautious than BASELINE
+  caution_heritability: 0.8       # fraction of parent's caution inherited by child
   caution_mutation: 0.1           # std dev of gaussian mutation applied to inherited caution
 
 faucet:
-  rate: 200                       # currency injected per tick
-  distribution: "wealth_proportional"   # random_living | poorest | wealth_proportional
+  rate: 1000                       # currency injected in simulation per tick
+  distribution: "wealth_proportional"
   enabled: true
   growth_rate: 100                # currency added to rate per tick (0 = no growth)
-  noise: 0.3                      # 0.0 = pure wealth-proportional, 1.0 = communism; wealth_proportional only
+  noise: 0.5                      # 0.0 = purely wealth-proportional; 1.0 = communism;
 
 simulation:
-  tick_interval: 0                # seconds per billing cycle
-  max_ticks: 480                 # experiment lifespan - number of rounds of rent
-  max_nodes: 500                 # hard cap
+  tick_interval: 0                # seconds per tick
+  max_ticks: 480                  # simulation lifespan
+  max_nodes: 500
   node_prefix: "myc-"
