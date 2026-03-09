@@ -8,9 +8,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from config import Config
 from utils import setup_logger
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log")
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
