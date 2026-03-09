@@ -72,6 +72,7 @@ class ContentDownloader:
             "--embed-thumbnail",
             "--write-info-json",
             "--no-overwrites",
+            "--remote-components",
             "-o", output_template,
         ]
 
