@@ -10,20 +10,20 @@ from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
 from ipv8_service import IPv8
 
-from communities.ElectionCommunity import ElectionCommunity
-from models.election import Election
+from communities.DemocracyCommunity import DemocracyCommunity
+from models.issue import Issue
 from models.vote import Vote
 from storage.json_store import JSONStore
 
 
-QueuedItem = Tuple[str, Union[Election, Vote]]  # ("election"|"vote", payload)
+QueuedItem = Tuple[str, Union[Issue, Vote]]  # ("issue"|"vote", payload)
 
 
 class IPv8Thread(QThread):
     """
     Runs IPv8 + an asyncio loop inside a QThread.
     Communication:
-      - GUI -> Thread: broadcastElection(Election), broadcastVote(Vote)
+      - GUI -> Thread: broadcastIssue(Issue), broadcastVote(Vote)
       - Thread -> GUI: dataChanged(), startedOk(), error(str)
     """
     dataChanged = pyqtSignal()
@@ -31,30 +31,30 @@ class IPv8Thread(QThread):
     error = pyqtSignal(str)
 
     # GUI -> worker signals
-    broadcastElection = pyqtSignal(object)  # Election
+    broadcastIssue = pyqtSignal(object)     # Issue
     broadcastVote = pyqtSignal(object)      # Vote
 
     def __init__(
         self,
         user_id: str,
-        election_store: JSONStore[Election],
+        issue_store: JSONStore[Issue],
         vote_store: JSONStore[Vote],
         parent=None,
     ):
         super().__init__(parent)
         self._user_id = user_id
-        self._election_store = election_store
+        self._issue_store = issue_store
         self._vote_store = vote_store
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ipv8: Optional[IPv8] = None
-        self._overlay: Optional[ElectionCommunity] = None
+        self._overlay: Optional[DemocracyCommunity] = None
 
         # Queue broadcasts that arrive before overlay is ready
         self._pending: Deque[QueuedItem] = deque()
 
         # Ensure GUI signals connect to thread slots via queued connection
-        self.broadcastElection.connect(self._on_broadcast_election)
+        self.broadcastIssue.connect(self._on_broadcast_issue)
         self.broadcastVote.connect(self._on_broadcast_vote)
 
     # -----------------------
@@ -116,7 +116,7 @@ class IPv8Thread(QThread):
     # -----------------------
     # Community startup
     # -----------------------
-    async def _start_community(self) -> ElectionCommunity:
+    async def _start_community(self) -> DemocracyCommunity:
         builder = ConfigBuilder().clear_keys().clear_overlays()
 
         os.makedirs("keys", exist_ok=True)
@@ -127,22 +127,22 @@ class IPv8Thread(QThread):
             self.dataChanged.emit()
 
         builder.add_overlay(
-            overlay_class="ElectionCommunity",
+            overlay_class="DemocracyCommunity",
             key_alias="my peer",
             walkers=[WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})],
             bootstrappers=default_bootstrap_defs,
             initialize={
-                "election_store": self._election_store,
+                "issue_store": self._issue_store,
                 "vote_store": self._vote_store,
                 "data_changed": _data_changed_callback,
             },
             on_start=[("on_start",)],
         )
 
-        self._ipv8 = IPv8(builder.finalize(), extra_communities={"ElectionCommunity": ElectionCommunity})
+        self._ipv8 = IPv8(builder.finalize(), extra_communities={"DemocracyCommunity": DemocracyCommunity})
         await self._ipv8.start()
 
-        overlay = next(o for o in self._ipv8.overlays if isinstance(o, ElectionCommunity))
+        overlay = next(o for o in self._ipv8.overlays if isinstance(o, DemocracyCommunity))
         return overlay
 
     async def _flush_pending(self) -> None:
@@ -156,8 +156,8 @@ class IPv8Thread(QThread):
         while self._pending:
             kind, payload = self._pending.popleft()
 
-            if kind == "election":
-                self._overlay.on_create_election(payload)  # type: ignore[arg-type]
+            if kind == "issue":
+                self._overlay.on_create_issue(payload)  # type: ignore[arg-type]
             elif kind == "vote":
                 self._overlay.on_vote(payload)  # type: ignore[arg-type]
 
@@ -168,7 +168,7 @@ class IPv8Thread(QThread):
     # GUI -> worker slots
     # -----------------------
     @pyqtSlot(object)
-    def _on_broadcast_election(self, election: Election) -> None:
+    def _on_broadcast_issue(self, issue: Issue) -> None:
         """
         Runs in GUI thread when signal emitted, but executes in worker thread
         because this object lives in worker thread once started (queued conn).
@@ -179,10 +179,10 @@ class IPv8Thread(QThread):
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("election", election))
+                self._pending.append(("issue", issue))
                 return
 
-            self._overlay.on_create_election(election)
+            self._overlay.on_create_issue(issue)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
 

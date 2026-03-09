@@ -1,3 +1,3 @@
 from typing import Final
 
-ELECTION_THRESHOLD: Final[int] = 9
+ISSUE_THRESHOLD: Final[int] = 9

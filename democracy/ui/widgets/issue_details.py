@@ -6,15 +6,15 @@ from typing import Callable, Optional
 from PyQt6.QtWidgets import QWidget, QLabel, QPushButton, QGridLayout
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from models.DTOs.election_with_votes import ElectionWithVotes
+from models.DTOs.issue_with_votes import IssueWithVotes
 from models.vote import Vote
 
 
-class ElectionDetailWidget(QWidget):
+class IssueDetailWidget(QWidget):
     approved = pyqtSignal(str)
 
     """
-    Displays a single election's details.
+    Displays a single issue's details.
     Calls on_vote(vote) when the Approve button is clicked.
 
     Args:
@@ -25,14 +25,14 @@ class ElectionDetailWidget(QWidget):
         super().__init__(parent)
         self.on_vote = on_vote
 
-        self.current_election_id: Optional[str] = None
+        self.current_issue_id: Optional[str] = None
 
         layout = QGridLayout(self)
 
-        layout.addWidget(QLabel("Election ID:"), 0, 0, alignment=Qt.AlignmentFlag.AlignTop)
-        self.election_id_lbl = QLabel("")
-        self.election_id_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.election_id_lbl, 0, 1, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(QLabel("Issue ID:"), 0, 0, alignment=Qt.AlignmentFlag.AlignTop)
+        self.issue_id_lbl = QLabel("")
+        self.issue_id_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.issue_id_lbl, 0, 1, alignment=Qt.AlignmentFlag.AlignTop)
 
         layout.addWidget(QLabel("Creator:"), 1, 0, alignment=Qt.AlignmentFlag.AlignTop)
         self.creator_lbl = QLabel("")
@@ -75,22 +75,22 @@ class ElectionDetailWidget(QWidget):
     def _set_enabled(self, enabled: bool) -> None:
         self.approve_btn.setEnabled(enabled)
 
-    def show(self, e: ElectionWithVotes):
+    def show(self, i: IssueWithVotes):
         """
-        Loads the election details into the frame.
+        Loads the issue details into the frame.
 
-        :param e: ElectionWithVotes to display.
+        :param i: IssueWithVotes to display.
         :return: None
         """
-        self.current_election_id = e.election.id
+        self.current_issue_id = i.issue.id
 
-        self.election_id_lbl.setText(e.election.id)
-        self.creator_lbl.setText(str(e.election.creator_id))
-        self.created_at_lbl.setText(str(e.election.created_at))
-        self.title_lbl.setText(e.election.title)
-        self.desc_lbl.setText(e.election.description or "")
-        self.threshold_lbl.setText(str(e.election.threshold))
-        self.votes_lbl.setText(str(e.votes))
+        self.issue_id_lbl.setText(i.issue.id)
+        self.creator_lbl.setText(str(i.issue.creator_id))
+        self.created_at_lbl.setText(str(i.issue.created_at))
+        self.title_lbl.setText(i.issue.title)
+        self.desc_lbl.setText(i.issue.description or "")
+        self.threshold_lbl.setText(str(i.issue.threshold))
+        self.votes_lbl.setText(str(i.votes))
 
         self._set_enabled(True)
 
@@ -100,5 +100,5 @@ class ElectionDetailWidget(QWidget):
 
         :return: None
         """
-        if self.current_election_id:
-            self.approved.emit(self.current_election_id)
+        if self.current_issue_id:
+            self.approved.emit(self.current_issue_id)

@@ -13,17 +13,17 @@ from PyQt6.QtWidgets import (
     QGridLayout,
 )
 
-from models.election import Election
+from models.issue import Issue
 
 
-class CreateElectionWidget(QWidget):
-    created = pyqtSignal(Election)
+class CreateIssueWidget(QWidget):
+    created = pyqtSignal(Issue)
 
     """
-    Widget for creating an election. Calls on_create(election) on submit.
+    Widget for creating an Issue. Calls on_create(issue) on submit.
 
     Args:
-        on_create: Callback function when an election is created.
+        on_create: Callback function when an issue is created.
         parent: Parent widget.
     """
     def __init__(self, parent: Optional[QWidget] = None):
@@ -54,11 +54,11 @@ class CreateElectionWidget(QWidget):
 
     def _create(self):
         """
-        Handles creation of a new election and calls the on_create callback.
+        Handles creation of a new issue and calls the on_create callback.
 
         :return: None
         """
-        e = Election(
+        e = Issue(
             id=str(uuid.uuid4()),
             title=self.title_edit.text(),
             description=self.description_edit.text(),

@@ -6,21 +6,21 @@ from ipv8.peer import Peer
 
 from config import COMMUNITY_ID, COMMUNICATION_INTERVAL
 from messages.base_message import BaseMessage
-from messages.election_message import ElectionMessage
+from messages.issue_message import IssueMessage
 from messages.vote_message import VoteMessage
-from models.election import Election
+from models.issue import Issue
 from models.vote import Vote
 from storage.json_store import JSONStore
 
 TModel = TypeVar("TModel")
 TMsg = TypeVar("TMsg", bound=BaseMessage)
 
-class ElectionCommunity(Community):
+class DemocracyCommunity(Community):
     """
-    Community to manage and propagate elections and votes among peers.
-    1. On start, broadcasts all known elections to connected peers.
-    2. On receiving an election, adds it to the store if unknown and propagates it further.
-    3. Provides a method to broadcast newly created elections to peers.
+    Community to manage and propagate issues and votes among peers.
+    1. On start, broadcasts all known issues to connected peers.
+    2. On receiving an issue, adds it to the store if unknown and propagates it further.
+    3. Provides a method to broadcast newly created issues to peers.
 
     Args:
         settings (CommunitySettings): Configuration for the community, including stores and callbacks.
@@ -30,12 +30,12 @@ class ElectionCommunity(Community):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
 
-        self.election_store: JSONStore[Election] = settings.election_store
+        self.issue_store: JSONStore[Issue] = settings.issue_store
         self.vote_store: JSONStore[Vote] = settings.vote_store
         self.data_changed = settings.data_changed
 
         # Register the message handlers for messages.
-        self.add_message_handler(ElectionMessage, self.on_election_message)
+        self.add_message_handler(IssueMessage, self.on_issue_message)
         self.add_message_handler(VoteMessage, self.on_vote_message)
 
     def _multicast(self, payload: BaseMessage, skip_peers: Optional[Set[Peer]] = None) -> None:
@@ -68,20 +68,20 @@ class ElectionCommunity(Community):
 
     def on_start(self) -> None:
         """
-        Called when the community starts. Sets up periodic broadcasting of known elections to peers.
+        Called when the community starts. Sets up periodic broadcasting of known issues to peers.
 
         :return: None
         """
         async def periodic_communication() -> None:
             """
-            Periodically broadcasts all known elections and votes to connected peers.
+            Periodically broadcasts all known issues and votes to connected peers.
 
             :return: None
             """
             self._broadcast_store(
-                self.election_store,
-                ElectionMessage.from_model,
-                label="elections"
+                self.issue_store,
+                IssueMessage.from_model,
+                label="issues"
             )
 
             self._broadcast_store(
@@ -108,25 +108,25 @@ class ElectionCommunity(Community):
 
         self._multicast(payload, skip_peers={peer})
 
-    @lazy_wrapper(ElectionMessage)
-    def on_election_message(self, peer: Peer, payload: ElectionMessage) -> None:
+    @lazy_wrapper(IssueMessage)
+    def on_issue_message(self, peer: Peer, payload: IssueMessage) -> None:
         """
-        Handles incoming election messages from peers. Adds unknown elections to the store and propagates them.
+        Handles incoming issue messages from peers. Adds unknown issues to the store and propagates them.
 
         :param peer: Peer that sent the message.
-        :param payload: Received election message.
+        :param payload: Received issue message.
         :return: None
         """
-        self._handle_incoming_message(peer, payload, store=self.election_store, on_added=self.data_changed)
+        self._handle_incoming_message(peer, payload, store=self.issue_store, on_added=self.data_changed)
 
-    def on_create_election(self, election: Election) -> None:
+    def on_create_issue(self, issue: Issue) -> None:
         """
-        Broadcasts a newly created election to all connected peers.
+        Broadcasts a newly created issue to all connected peers.
 
-        :param election: Election to broadcast.
+        :param issue: Issue to broadcast.
         :return: None
         """
-        self._multicast(ElectionMessage.from_model(election))
+        self._multicast(IssueMessage.from_model(issue))
 
     @lazy_wrapper(VoteMessage)
     def on_vote_message(self, peer: Peer, payload: VoteMessage) -> None:
