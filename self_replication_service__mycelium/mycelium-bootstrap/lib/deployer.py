@@ -239,6 +239,15 @@ class Deployer:
             timeout=300
         )
 
+        # Install deno (required by yt-dlp for YouTube JS extraction)
+        _, _, deno_check = self.run_command("which deno", check=False)
+        if deno_check != 0:
+            logger.info("Installing deno...")
+            self.run_command(
+                "curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh",
+                timeout=120
+            )
+
         logger.info("System dependencies installed")
 
     def setup_firewall(self, extra_ports: Optional[list] = None) -> None:
