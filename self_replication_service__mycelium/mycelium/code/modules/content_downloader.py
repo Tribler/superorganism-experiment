@@ -91,6 +91,11 @@ class ContentDownloader:
             if result.returncode != 0:
                 logger.warning(f"yt-dlp failed for {video_id}: {result.stderr[:200]}")
                 return False
+            # Clean up leftover thumbnail files (yt-dlp leaves .webp/.png after embedding)
+            for thumb in self.content_dir.glob(f"{video_id}_*.webp"):
+                thumb.unlink()
+            for thumb in self.content_dir.glob(f"{video_id}_*.png"):
+                thumb.unlink()
             logger.info(f"Downloaded {video_id}")
             return True
         except subprocess.TimeoutExpired:
