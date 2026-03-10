@@ -129,6 +129,9 @@ def initialize_wallet() -> None:
     try:
         if wallet_db.exists():
             logger.info("Loading wallet from existing DB...")
+            if mnemonic_seed_file.exists():
+                mnemonic_seed_file.unlink()
+                logger.info("Cleaned up stale btc_mnemonic_seed")
             raw = Wallet(name, db_uri=db_uri)
         else:
             if mnemonic_seed_file.exists():

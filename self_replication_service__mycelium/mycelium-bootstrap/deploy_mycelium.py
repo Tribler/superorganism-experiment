@@ -67,7 +67,6 @@ def deploy(
     host: str,
     ssh_port: int = 22,
     ssh_key_path: str = None,
-    btc_mnemonic: str = None,
 ) -> None:
     """Deploy mycelium to server."""
     key_path = ssh_key_path or str(DEFAULT_SSH_KEY_PATH)
@@ -76,6 +75,19 @@ def deploy(
     try:
         logger.info(f"Connecting to {host}:{ssh_port}...")
         deployer.connect(host, port=ssh_port, retry_count=5, retry_delay=10)
+
+        if deployer.wallet_initialized():
+            logger.info("Existing wallet on VPS — skipping wallet generation")
+            print("\nExisting wallet detected. Keeping current VPS wallet.\n")
+            btc_mnemonic = None
+        else:
+            btc_mnemonic, btc_address = generate_vps_wallet()
+            print()
+            print("=" * 60)
+            print("Generated VPS btc wallet")
+            print(f"Address : {btc_address}")
+            print("=" * 60)
+            print()
 
         logger.info("Installing system dependencies...")
         deployer.install_dependencies()
@@ -125,9 +137,11 @@ def deploy(
         deployer.disconnect()
 
     # Stream logs - this replaces the Python process
+    known_hosts = str(Path.home() / ".mycelium" / "known_hosts")
     os.execvp("ssh", [
         "ssh", "-i", key_path,
-        "-o", "StrictHostKeyChecking=no",
+        "-o", "StrictHostKeyChecking=yes",
+        "-o", f"UserKnownHostsFile={known_hosts}",
         f"root@{host}",
         "tail", "-f", "/root/logs/orchestrator.log"
     ])
@@ -170,26 +184,12 @@ Examples:
             logger.error("Run 'python acquire_vps.py' first, or specify --host")
             sys.exit(1)
 
-    # Generate fresh VPS wallet
-    logger.info("Generating VPS wallet...")
-    btc_mnemonic, btc_address = generate_vps_wallet()
-    print()
-    print("=" * 60)
-    print("VPS BITCOIN WALLET GENERATED")
-    print("=" * 60)
-    print(f"Address : {btc_address}")
-    print(f"Mnemonic: {btc_mnemonic}")
-    print("SAVE THE MNEMONIC — it is the only way to recover funds!")
-    print("=" * 60)
-    print()
-
     # Deploy
     try:
         deploy(
             host=host,
             ssh_port=ssh_port,
             ssh_key_path=ssh_key,
-            btc_mnemonic=btc_mnemonic,
         )
     except Exception as e:
         logger.error(f"Deployment failed: {e}")

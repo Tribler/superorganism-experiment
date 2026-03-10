@@ -370,7 +370,10 @@ class Deployer:
 
     def set_environment_variable(self, name: str, value: str) -> None:
         escaped_value = value.replace("'", "'\\''")
-        self.run_command(f"echo \"{name}='{escaped_value}'\" >> /etc/environment")
+        self.run_command(
+            f"sed -i '/^{name}=/d' /etc/environment && "
+            f"echo \"{name}='{escaped_value}'\" >> /etc/environment"
+        )
 
     def start_orchestrator(
         self,
@@ -424,6 +427,13 @@ class Deployer:
             raise DeployerError("Orchestrator failed to start")
 
         logger.info("Orchestrator started successfully")
+
+    def wallet_initialized(self) -> bool:
+        """Return True if the VPS wallet has already been initialized."""
+        _, _, exit_code = self.run_command(
+            f"test -f {self.REMOTE_DATA_DIR}/mnemonic.txt", check=False
+        )
+        return exit_code == 0
 
     def check_health(self) -> bool:
         """Return True if orchestrator is running."""
