@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 SERVER_INFO_FILE = Path.home() / ".mycelium" / "server.json"
 LOG_ENDPOINT_FILE = Path.home() / ".mycelium" / "log_endpoint"
 LOG_SECRET_FILE = Path.home() / ".mycelium" / "log_secret"
+SPORESTACK_TOKEN_FILE = Path.home() / ".mycelium" / "sporestack_token"
 DEFAULT_SSH_KEY_PATH = Path.home() / ".mycelium" / "ssh" / "deploy_key"
 DEFAULT_VIDEO_IDS_FILE = Path(__file__).parent / "yt-api-cc-scripts" / "cc_video_ids.txt"
 DEFAULT_COOKIES_FILE = Path(__file__).parent / "yt_cookies.txt"
@@ -49,12 +50,16 @@ def load_log_config() -> tuple[str | None, str | None]:
     return endpoint, secret
 
 
+def load_sporestack_token() -> str | None:
+    if not SPORESTACK_TOKEN_FILE.exists():
+        logger.warning("No SporeStack token found at ~/.mycelium/sporestack_token, deploying without it")
+        return None
+    return SPORESTACK_TOKEN_FILE.read_text().strip() or None
+
+
 def generate_vps_wallet() -> tuple[str, str]:
     """
-    Generate a fresh ephemeral wallet for VPS injection.
-
-    Returns (mnemonic, btc_address). The local wallet DB is deleted
-    immediately after — only the mnemonic is handed to the VPS.
+    Generate a fresh btc wallet
     """
     wallet = BitcoinWallet(f"vps-deploy-{int(time.time())}")
     mnemonic = wallet.create_new()
@@ -78,16 +83,11 @@ def deploy(
 
         if deployer.wallet_initialized():
             logger.info("Existing wallet on VPS — skipping wallet generation")
-            print("\nExisting wallet detected. Keeping current VPS wallet.\n")
             btc_mnemonic = None
         else:
             btc_mnemonic, btc_address = generate_vps_wallet()
-            print()
-            print("=" * 60)
-            print("Generated VPS btc wallet")
-            print(f"Address : {btc_address}")
-            print("=" * 60)
-            print()
+            logger.info("Generated VPS btc wallet")
+            logger.info(f"Address: {btc_address}")
 
         logger.info("Installing system dependencies...")
         deployer.install_dependencies()
@@ -112,7 +112,13 @@ def deploy(
 
         logger.info("Starting orchestrator...")
         log_endpoint, log_secret = load_log_config()
-        deployer.start_orchestrator(btc_mnemonic=btc_mnemonic, log_endpoint=log_endpoint, log_secret=log_secret)
+        sporestack_token = load_sporestack_token()
+        deployer.start_orchestrator(
+            btc_mnemonic=btc_mnemonic,
+            log_endpoint=log_endpoint,
+            log_secret=log_secret,
+            sporestack_token=sporestack_token,
+        )
 
         logger.info("Verifying health...")
         if deployer.check_health():

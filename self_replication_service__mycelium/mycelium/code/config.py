@@ -58,6 +58,9 @@ class Config:
     BTC_MNEMONIC: str = os.getenv("MYCELIUM_BTC_MNEMONIC", "")
     BITCOIN_NETWORK: str = os.getenv("MYCELIUM_BITCOIN_NETWORK", "bitcoin")  # mainnet
 
+    # SporeStack / VPS identity
+    SPORESTACK_TOKEN_FILE: Path = DATA_DIR / "sporestack_token"
+
     # Exit codes
     EXIT_SUCCESS: int = 0
     EXIT_FAILURE: int = 1

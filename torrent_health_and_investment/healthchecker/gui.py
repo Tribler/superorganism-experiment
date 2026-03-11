@@ -154,7 +154,7 @@ class SwarmHealthGUI:
 
         fleet_scroll_y = ttk.Scrollbar(fleet_tree_frame, orient=tk.VERTICAL)
 
-        fleet_columns = ("Name", "IP", "Commit", "Uptime", "Disk", "BTC", "Region", "Last Seen")
+        fleet_columns = ("Name", "IP", "Commit", "Uptime", "Disk", "BTC", "BTC Address", "Runway", "Region", "Last Seen")
         self.fleet_tree = ttk.Treeview(
             fleet_tree_frame, columns=fleet_columns, show="headings",
             yscrollcommand=fleet_scroll_y.set, height=5
@@ -172,6 +172,8 @@ class SwarmHealthGUI:
         self.fleet_tree.column("Uptime", width=100)
         self.fleet_tree.column("Disk", width=120)
         self.fleet_tree.column("BTC", width=100)
+        self.fleet_tree.column("BTC Address", width=160)
+        self.fleet_tree.column("Runway", width=70)
         self.fleet_tree.column("Region", width=100)
         self.fleet_tree.column("Last Seen", width=150)
 
@@ -303,6 +305,9 @@ class SwarmHealthGUI:
                 btc_sat = info.get("btc_balance_sat", 0)
                 btc_str = f"{btc_sat} sat" if btc_sat else "-"
 
+                runway_days = info.get("vps_days_remaining", 0)
+                runway_str = f"{runway_days}d" if runway_days else "-"
+
                 last_seen = info.get("last_seen", 0)
                 if last_seen:
                     last_seen_str = datetime.fromtimestamp(last_seen).strftime("%H:%M:%S")
@@ -316,6 +321,8 @@ class SwarmHealthGUI:
                     uptime_str,
                     disk_str,
                     btc_str,
+                    info.get("btc_address", "") or "-",
+                    runway_str,
                     info.get("vps_provider_region", "") or "-",
                     last_seen_str,
                 ))

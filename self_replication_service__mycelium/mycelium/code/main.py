@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import modules.event_logger as event_logger
+import modules.node_monitor as node_monitor
 import modules.wallet as wallet_module
 from config import Config
 from modules import CodeSync, CodeSyncError, Seedbox, SeedboxError, LiberationAnnouncer, ContentDownloader, ContentDownloaderError
@@ -162,6 +163,15 @@ class Orchestrator:
         finally:
             await self.announcer.stop()
 
+    async def monitor_loop(self) -> None:
+        """Periodically refresh node financial/operational state."""
+        monitor = node_monitor.get_monitor()
+        if not monitor:
+            return
+        while self.running:
+            await asyncio.to_thread(monitor.refresh)
+            await asyncio.sleep(node_monitor.NodeMonitor.REFRESH_INTERVAL)
+
     async def run_seedbox_info_announcer(self) -> None:
         """Run the seedbox info broadcast loop (waits for community init)."""
         logger.info("[SEEDBOX-INFO] Waiting for community to initialize...")
@@ -206,6 +216,7 @@ class Orchestrator:
             asyncio.create_task(self.run_seedbox_loop()),
             asyncio.create_task(self.run_announcer()),
             asyncio.create_task(self.run_seedbox_info_announcer()),
+            asyncio.create_task(self.monitor_loop()),
         ]
 
         try:
@@ -232,6 +243,7 @@ def main() -> int:
         Config.validate()
         wallet_module.initialize_wallet()
         w = wallet_module.get_wallet()
+        node_monitor.init(Config.SPORESTACK_TOKEN_FILE)
         event_logger.init(Config.LOG_ENDPOINT, Config.LOG_SECRET, Config.FRIENDLY_NAME)
         event_logger.get().log_event("birth", {
             "parent": Config.PARENT_NAME,

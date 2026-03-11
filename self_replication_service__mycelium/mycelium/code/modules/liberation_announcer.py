@@ -209,9 +209,10 @@ class LiberationAnnouncer:
         public_ip = await self._get_public_ip()
 
         from modules.wallet import get_wallet
+        from modules.node_monitor import get_monitor
         w = get_wallet()
         btc_address = w.get_receiving_address() if w else ""
-        # balance not broadcast — reveals target value to all P2P peers
+        state = get_monitor().get_state() if get_monitor() else None
 
         return SeedboxInfoPayload(
             friendly_name=Config.FRIENDLY_NAME,
@@ -221,9 +222,9 @@ class LiberationAnnouncer:
             disk_total_bytes=disk_total,
             disk_used_bytes=disk_used,
             btc_address=btc_address,
-            btc_balance_sat=0,
-            vps_provider_region="",   # placeholder
-            vps_days_remaining=0      # placeholder
+            btc_balance_sat=state.btc_balance_sat if state else 0,
+            vps_provider_region=f"{state.vps_provider}/{state.vps_region}" if state else "",
+            vps_days_remaining=state.days_remaining if state else 0,
         )
 
     async def announce_seedbox_info(self) -> int:

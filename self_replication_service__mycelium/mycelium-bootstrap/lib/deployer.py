@@ -375,12 +375,20 @@ class Deployer:
             f"echo \"{name}='{escaped_value}'\" >> /etc/environment"
         )
 
+    def sporestack_token_deployed(self) -> bool:
+        """Return True if the SporeStack token has already been deployed."""
+        _, _, exit_code = self.run_command(
+            f"test -f {self.REMOTE_DATA_DIR}/sporestack_token", check=False
+        )
+        return exit_code == 0
+
     def start_orchestrator(
         self,
         btc_mnemonic: Optional[str] = None,
         log_endpoint: Optional[str] = None,
         log_secret: Optional[str] = None,
         parent_name: str = "genesis",
+        sporestack_token: Optional[str] = None,
     ) -> None:
         logger.info("Starting orchestrator...")
 
@@ -396,12 +404,14 @@ class Deployer:
 
         if btc_mnemonic:
             self._write_secret_file(btc_mnemonic, f"{self.REMOTE_DATA_DIR}/btc_mnemonic_seed")
+        if sporestack_token and not self.sporestack_token_deployed():
+            self._write_secret_file(sporestack_token, f"{self.REMOTE_DATA_DIR}/sporestack_token")
+            logger.info("SporeStack token deployed")
         if log_endpoint:
             env_vars["MYCELIUM_LOG_ENDPOINT"] = log_endpoint
         if log_secret:
             env_vars["MYCELIUM_LOG_SECRET"] = log_secret
         env_vars["MYCELIUM_PARENT_NAME"] = parent_name
-
         for name, value in env_vars.items():
             self.set_environment_variable(name, value)
 
