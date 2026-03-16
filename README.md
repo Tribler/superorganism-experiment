@@ -7,6 +7,7 @@ Our work contains several novelties:
 - 🧑‍🚒 AI models in a real-time competition for survival of the fittest using multi-arm-bandit and model score gossip.
 - 👓 Find information using decentralized relevance ranking
 - 🥇 First decentralized voting system. Your place, your control, your vote. Our vibe coded demo we're implementing [with real crypto](https://arxiv.org/pdf/2507.09453).
+- 🥼 User-driven self-evolution. The emergent voting behavior is that users drive the roadmap using democracy. No lawyer or company can stop the will of the people.
 
 ![demo_of_democratic_voting_process](https://github.com/user-attachments/assets/c5881768-71df-4a82-8f7b-ad3c02a64ceb)
 
