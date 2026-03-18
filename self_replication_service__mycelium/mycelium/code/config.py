@@ -40,6 +40,12 @@ class Config:
     LOG_SECRET: str = os.getenv("MYCELIUM_LOG_SECRET", "")
     PARENT_NAME: str = os.getenv("MYCELIUM_PARENT_NAME", "genesis")
 
+    # IPV8 / Fleet
+    WHOAMI_BROADCAST_INTERVAL: int = int(os.getenv("MYCELIUM_WHOAMI_BROADCAST_INTERVAL", "60"))
+    WHOAMI_GOSSIP_COOLDOWN: int = int(os.getenv("MYCELIUM_WHOAMI_GOSSIP_COOLDOWN", "60"))
+    ANNOUNCE_INTERVAL: int = int(os.getenv("MYCELIUM_ANNOUNCE_INTERVAL", "60"))
+    PEER_REGISTRY_TTL: int = int(os.getenv("MYCELIUM_PEER_REGISTRY_TTL", "3600"))
+
     # Seedbox configuration
     TORRENT_TRACKER: str = os.getenv(
         "MYCELIUM_TRACKER",
@@ -57,6 +63,10 @@ class Config:
     BITCOIN_WALLET_NAME: str = os.getenv("MYCELIUM_BITCOIN_WALLET", "mycelium_wallet")
     BTC_MNEMONIC: str = os.getenv("MYCELIUM_BTC_MNEMONIC", "")
     BITCOIN_NETWORK: str = os.getenv("MYCELIUM_BITCOIN_NETWORK", "bitcoin")  # mainnet
+
+    # Persistent state
+    STATE_DB_FILE: Path = DATA_DIR / "state.db"
+    INITIAL_CAUTION_TRAIT: float = float(os.getenv("MYCELIUM_CAUTION_TRAIT", "0.5"))
 
     # SporeStack / VPS identity
     SPORESTACK_TOKEN_FILE: Path = DATA_DIR / "sporestack_token"

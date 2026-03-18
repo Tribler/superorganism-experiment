@@ -20,6 +20,9 @@ from config import Config
 from utils import setup_logger
 from modules.liberation_community import LiberationCommunity, LiberatedContentPayload, SeedboxInfoPayload
 from modules.seedbox import Seedbox, ContentInfo
+from modules.wallet import get_wallet
+from modules.node_monitor import get_monitor
+from modules.peer_registry import get_registry
 
 logger = setup_logger(
     __name__,
@@ -31,9 +34,6 @@ logger = setup_logger(
 class LiberationAnnouncer:
     """
     Announces seeded content to the IPV8 network.
-
-    Works alongside the Seedbox to broadcast torrent information
-    to health checkers on the network.
     """
 
     def __init__(self, seedbox: Seedbox, key_file: Optional[str] = None):
@@ -89,6 +89,11 @@ class LiberationAnnouncer:
 
         if not self.community:
             raise RuntimeError("LiberationCommunity not found after startup")
+
+        registry = get_registry()
+        if registry:
+            self.community.set_seedbox_info_callback(registry.on_seedbox_info_received)
+            logger.info("Peer registry wired to seedbox info callback")
 
         logger.info("LiberationCommunity is running")
         logger.info(f"Community ID: {self.community.community_id.hex()}")
@@ -208,8 +213,6 @@ class LiberationAnnouncer:
         disk_total, disk_used = self._get_disk_usage()
         public_ip = await self._get_public_ip()
 
-        from modules.wallet import get_wallet
-        from modules.node_monitor import get_monitor
         w = get_wallet()
         btc_address = w.get_receiving_address() if w else ""
         state = get_monitor().get_state() if get_monitor() else None

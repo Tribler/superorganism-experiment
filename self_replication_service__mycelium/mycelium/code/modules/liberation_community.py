@@ -5,6 +5,7 @@ This community allows seedboxes to broadcast their torrents to the network,
 enabling health checkers to discover and monitor them.
 """
 
+import time
 from dataclasses import dataclass
 from hashlib import sha1
 from typing import Callable, Dict, Optional, Set
@@ -13,6 +14,8 @@ from ipv8.community import Community, CommunitySettings
 from ipv8.lazy_community import lazy_wrapper
 from ipv8.messaging.payload_dataclass import DataClassPayload
 from ipv8.peer import Peer
+
+from config import Config
 
 
 @dataclass
@@ -55,6 +58,9 @@ class LiberationCommunity(Community):
 
         # Track which peers we've sent each infohash to
         self.sent_to_peers: Dict[bytes, Set[str]] = {}
+
+        # Gossip dedup: btc_address -> unix timestamp of last forward
+        self._last_forwarded_whoami: Dict[str, float] = {}
 
         # Callback for received content (optional)
         self.on_content_received_callback: Optional[Callable[[Peer, LiberatedContentPayload], None]] = None
@@ -168,6 +174,17 @@ class LiberationCommunity(Community):
                 self.on_seedbox_info_callback(peer, payload)
             except Exception as e:
                 self.logger.error("Error in seedbox info callback: %s", e)
+
+        now = time.time()
+        if now - self._last_forwarded_whoami.get(payload.btc_address, 0) > Config.WHOAMI_GOSSIP_COOLDOWN:
+            self._last_forwarded_whoami[payload.btc_address] = now
+            for other_peer in self.get_peers():
+                if other_peer.mid != peer.mid:
+                    try:
+                        self.ez_send(other_peer, payload)
+                    except Exception as e:
+                        self.logger.warning("Failed to forward WHOAMI to %s: %s",
+                                            other_peer.mid.hex()[:16], e)
 
     def set_seedbox_info_callback(
         self,

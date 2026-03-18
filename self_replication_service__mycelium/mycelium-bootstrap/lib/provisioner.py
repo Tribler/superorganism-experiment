@@ -31,8 +31,8 @@ class SporeStackClient:
     DEFAULT_TIMEOUT = 30
 
     # Default server config ~ $46.20
-    DEFAULT_PROVIDER = "vultr"
-    DEFAULT_FLAVOR = "vhp-2c-4gb-amd"
+    DEFAULT_PROVIDER = "sporestack"
+    DEFAULT_FLAVOR = "sporestack-eu-4gb"
     DEFAULT_REGION = "ams"  # Amsterdam
     DEFAULT_OS = "ubuntu-24.04"
     DEFAULT_DAYS = 30
@@ -128,7 +128,7 @@ class SporeStackClient:
         provider: Optional[str] = None,
         days: Optional[int] = None,
         hostname: Optional[str] = None,
-        autorenew: bool = False,
+        autorenew: bool = True,
         region: Optional[str] = None,
         user_data: Optional[str] = None
     ) -> str:

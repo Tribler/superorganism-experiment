@@ -14,6 +14,8 @@ from pathlib import Path
 
 import modules.event_logger as event_logger
 import modules.node_monitor as node_monitor
+import modules.peer_registry as peer_registry
+import modules.state as state_module
 import modules.wallet as wallet_module
 from config import Config
 from modules import CodeSync, CodeSyncError, Seedbox, SeedboxError, LiberationAnnouncer, ContentDownloader, ContentDownloaderError
@@ -89,7 +91,9 @@ class Orchestrator:
     async def heartbeat(self) -> None:
         """Periodic heartbeat logging."""
         while self.running:
-            logger.info("Orchestrator Running")
+            registry = peer_registry.get_registry()
+            live_peers = registry.get_peer_count() if registry else 0
+            logger.info("Orchestrator Running | live fleet peers: %d", live_peers)
             await asyncio.sleep(Config.HEARTBEAT_INTERVAL)
 
     async def download_content_if_needed(self) -> None:
@@ -157,7 +161,7 @@ class Orchestrator:
         """Run the IPV8 liberation announcer."""
         try:
             await self.announcer.start()
-            await self.announcer.announce_loop(interval=30)
+            await self.announcer.announce_loop(interval=Config.ANNOUNCE_INTERVAL)
         except Exception as e:
             logger.error(f"Announcer error: {e}", exc_info=True)
         finally:
@@ -189,7 +193,7 @@ class Orchestrator:
 
         logger.info("[SEEDBOX-INFO] Community ready, starting seedbox info loop")
         try:
-            await self.announcer.seedbox_info_loop(interval=60)
+            await self.announcer.seedbox_info_loop(interval=Config.WHOAMI_BROADCAST_INTERVAL)
         except Exception as e:
             logger.error(f"Seedbox info announcer error: {e}", exc_info=True)
 
@@ -241,9 +245,21 @@ def main() -> int:
     """
     try:
         Config.validate()
+
+        # Persistent state — must be available before wallet or decision loop
+        ps = state_module.init(Config.STATE_DB_FILE)
+        if ps.get_caution_trait() == 0.5 and ps.get("caution_trait") is None:
+            ps.set_caution_trait(Config.INITIAL_CAUTION_TRAIT)
+            logger.info("Initialized caution trait to %.2f", Config.INITIAL_CAUTION_TRAIT)
+        if ps.is_spawn_in_progress():
+            logger.warning("Detected interrupted spawn from previous run — flag kept for decision loop")
+        if ps.is_failsafe_in_progress():
+            logger.warning("Detected interrupted failsafe from previous run — flag kept for decision loop")
+
         wallet_module.initialize_wallet()
         w = wallet_module.get_wallet()
         node_monitor.init(Config.SPORESTACK_TOKEN_FILE)
+        peer_registry.init(ttl_seconds=Config.PEER_REGISTRY_TTL)
         event_logger.init(Config.LOG_ENDPOINT, Config.LOG_SECRET, Config.FRIENDLY_NAME)
         event_logger.get().log_event("birth", {
             "parent": Config.PARENT_NAME,
