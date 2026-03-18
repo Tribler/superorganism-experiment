@@ -6,6 +6,7 @@ BitTorrent seeding operations.
 import glob
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,7 @@ class Seedbox:
         self.session = None
         self.handles: List[Tuple[lt.torrent_handle, str]] = []
         self.content_registry: Dict[str, ContentInfo] = {}  # infohash -> ContentInfo
+        self._stop_event = threading.Event()
 
     def _create_torrent(self, file_path: Path) -> Path:
         """
@@ -285,19 +287,23 @@ class Seedbox:
         logger.info(f"Seeding {len(self.handles)} torrents")
 
         try:
-            while True:
+            while not self._stop_event.is_set():
                 status = self.get_status()
                 logger.info(
                     f"Seeding: {status['torrents']} torrents, "
                     f"{status['peers']} peers, "
                     f"{status['uploaded'] / 1024 / 1024:.1f} MB uploaded"
                 )
-                time.sleep(status_interval)
+                self._stop_event.wait(timeout=status_interval)
         except KeyboardInterrupt:
             logger.info("Seedbox interrupted")
         finally:
             if self.session:
                 logger.info("Stopping seedbox")
+
+    def cancel(self) -> None:
+        """Signal the status loop to exit."""
+        self._stop_event.set()
 
     def seed_content(self, status_interval: int = 60) -> None:
         """

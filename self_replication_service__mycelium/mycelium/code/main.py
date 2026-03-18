@@ -56,6 +56,7 @@ class Orchestrator:
         )
         self.announcer = LiberationAnnouncer(self.seedbox)
         self.executor = ThreadPoolExecutor(max_workers=2)
+        self._tasks: list = []
         self._setup_signal_handlers()
 
     def _setup_signal_handlers(self) -> None:
@@ -67,6 +68,8 @@ class Orchestrator:
         """Handle shutdown signals."""
         logger.info(f"Received signal {signum}, initiating shutdown")
         self.running = False
+        for task in self._tasks:
+            task.cancel()
 
     async def check_for_updates(self) -> None:
         """Periodic task to check for code updates."""
@@ -222,6 +225,7 @@ class Orchestrator:
             asyncio.create_task(self.run_seedbox_info_announcer()),
             asyncio.create_task(self.monitor_loop()),
         ]
+        self._tasks = [self.seedbox, *tasks]
 
         try:
             await asyncio.gather(*tasks)
