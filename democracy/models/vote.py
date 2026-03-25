@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import uuid4, UUID
 
-from models.utils import parse_datetime
+from democracy.models.utils import parse_datetime
 
 
 @dataclass

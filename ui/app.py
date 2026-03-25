@@ -19,12 +19,12 @@ from PyQt6.QtWidgets import (
 )
 
 from config import UI_REFRESH_DELAY
-from models.issue import Issue
-from models.person import Person
-from models.solution import Solution
-from models.vote import Vote
-from storage.issue_reposiory import IssueRepository
-from storage.json_store import JSONStore
+from democracy.models.issue import Issue
+from democracy.models.person import Person
+from democracy.models.solution import Solution
+from democracy.models.vote import Vote
+from democracy.storage.issue_reposiory import IssueRepository
+from democracy.storage.json_store import JSONStore
 from ui.models.issue_draft import IssueDraft
 from ui.widgets.create_issue_overlay import CreateIssueOverlay
 from ui.widgets.issue_details import IssueDetailWidget
@@ -140,6 +140,8 @@ class Application(QMainWindow):
         layout.setContentsMargins(18, 90, 18, 18)
         layout.setSpacing(12)
 
+        self.seedboxes_btn = QPushButton("Seedboxes")
+
         self.dashboard_btn = QPushButton("Dashboard")
         self.dashboard_btn.setObjectName("navActive")
 
@@ -155,6 +157,7 @@ class Application(QMainWindow):
         ]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(__import__("PyQt6.QtCore").QtCore, "Qt") else btn.cursor())
 
+        layout.addWidget(self.seedboxes_btn)
         layout.addWidget(self.dashboard_btn)
         layout.addWidget(self.my_proposals_btn)
         layout.addWidget(self.voting_history_btn)

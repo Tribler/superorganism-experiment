@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 
-from models.DTOs.issue_with_votes import IssueWithVotes
+from democracy.models.DTOs.issue_with_votes import IssueWithVotes
 from ui.widgets.issue_table_model import IssueTableModel
 from ui.widgets.issue_filter_proxy_model import IssueFilterProxyModel
 

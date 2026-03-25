@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections import deque
+from pathlib import Path
 from typing import Optional, Tuple, Union, Deque
 from uuid import UUID
 
@@ -11,10 +12,11 @@ from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
 from ipv8_service import IPv8
 
-from communities.DemocracyCommunity import DemocracyCommunity
-from models.issue import Issue
-from models.vote import Vote
-from storage.json_store import JSONStore
+from config import KEYS_PATH
+from democracy.network.communities.DemocracyCommunity import DemocracyCommunity
+from democracy.models.issue import Issue
+from democracy.models.vote import Vote
+from democracy.storage.json_store import JSONStore
 
 
 QueuedItem = Tuple[str, Union[Issue, Vote]]  # ("issue"|"vote", payload)
@@ -120,8 +122,8 @@ class IPv8Thread(QThread):
     async def _start_community(self) -> DemocracyCommunity:
         builder = ConfigBuilder().clear_keys().clear_overlays()
 
-        os.makedirs("keys", exist_ok=True)
-        builder.add_key("my peer", "curve25519", f"keys/{str(self._user_id)}.pem")
+        os.makedirs(Path(KEYS_PATH), exist_ok=True)
+        builder.add_key("my peer", "curve25519", f"{KEYS_PATH}/{str(self._user_id)}.pem")
 
         # Thread -> GUI callback: just emit signal; GUI will refresh (coalesced)
         def _data_changed_callback() -> None:

@@ -2,10 +2,10 @@ from collections import Counter
 from typing import List, Optional
 from uuid import UUID
 
-from models.DTOs.issue_with_votes import IssueWithVotes
-from models.issue import Issue
-from models.vote import Vote
-from storage.json_store import JSONStore
+from democracy.models.DTOs.issue_with_votes import IssueWithVotes
+from democracy.models.issue import Issue
+from democracy.models.vote import Vote
+from democracy.storage.json_store import JSONStore
 
 
 class IssueRepository:

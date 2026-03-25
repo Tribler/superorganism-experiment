@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from models.issue import Issue
+from democracy.models.issue import Issue
 
 
 @dataclass
