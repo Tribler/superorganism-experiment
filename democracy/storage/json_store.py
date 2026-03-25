@@ -3,6 +3,7 @@ import os
 
 from pathlib import Path
 from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from uuid import UUID
 
 T = TypeVar("T")
 
@@ -74,7 +75,7 @@ class JSONStore(Generic[T]):
 
         return None
 
-    def get(self, id: str) -> Optional[T]:
+    def get(self, id: UUID) -> Optional[T]:
         """
         Retrieve an object by its ID (if the object has an "id" attribute).
 
@@ -93,7 +94,7 @@ class JSONStore(Generic[T]):
         self._data.append(obj)
         self._save()
 
-    def replace(self, id: str, obj: T) -> bool:
+    def replace(self, id: UUID, obj: T) -> bool:
         """
         Replace an existing object in the store by its ID (if the object has an "id" attribute).
 
@@ -110,7 +111,7 @@ class JSONStore(Generic[T]):
 
         return False
 
-    def delete(self, id: str) -> bool:
+    def delete(self, id: UUID) -> bool:
         """
         Delete an object from the store by its ID (if the object has an "id" attribute).
 

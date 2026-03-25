@@ -3,3 +3,6 @@ keys/
 
 # Data folder
 data
+
+# Intellij IDEA project files
+.idea/

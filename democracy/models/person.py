@@ -1,4 +1,4 @@
-import uuid
+from uuid import uuid4, UUID
 
 from dataclasses import dataclass, field
 
@@ -11,4 +11,4 @@ class Person:
     Attributes:
         id (str): Unique identifier for the person.
     """
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    id: UUID = field(default_factory=uuid4)

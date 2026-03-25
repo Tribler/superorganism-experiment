@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from uuid import UUID
 
 from ipv8.messaging.payload_dataclass import DataClassPayload
 
@@ -15,12 +16,12 @@ class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
     Attributes:
         id (str): Unique identifier for the vote.
         voter_id (str): Identifier of the voter who cast the vote.
-        election_id (str): Identifier of the election in which the vote was cast.
+        issue_id (str): Identifier of the issue in which the vote was cast.
         created_at (str): Timestamp when the vote was created (in ISO format).
     """
-    id: str
     voter_id: str
-    election_id: str
+    issue_id: str
+    id: str
     created_at: str
 
     @property
@@ -32,20 +33,20 @@ class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
 
     def to_model(self) -> Vote:
         return Vote(
-            id=self.id,
-            voter_id=self.voter_id,
-            election_id=self.election_id,
+            voter_id=UUID(self.voter_id),
+            issue_id=UUID(self.issue_id),
+            id=UUID(self.id),
             created_at=parse_datetime(self.created_at),
         )
 
     @classmethod
     def from_model(cls, vote: Vote) -> "VoteMessage":
         return cls(
-            id=vote.id,
-            voter_id=vote.voter_id,
-            election_id=vote.election_id,
+            voter_id=str(vote.voter_id),
+            issue_id=str(vote.issue_id),
+            id=str(vote.id),
             created_at=vote.created_at.isoformat(),
         )
 
 # Force schema generation once on import
-_ = VoteMessage(id="", voter_id="", election_id="", created_at="")
+_ = VoteMessage(id="", voter_id="", issue_id="", created_at="")

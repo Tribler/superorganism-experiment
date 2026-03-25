@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import asyncio
-import os
 import sys
-import threading
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
-from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
-from ipv8_service import IPv8
-
-from communities.ElectionCommunity import ElectionCommunity
 from config import DATA_PATH
-from models.election import Election
+from models.issue import Issue
 from models.person import Person
 from models.vote import Vote
 from network.ipv8_thread import IPv8Thread
@@ -30,13 +23,13 @@ def main() -> None:
     user = Person()  # Person generates a random ID by default
 
     # --- Data stores ---
-    election_store = JSONStore[Election](
-        path=Path(DATA_PATH + user.id + "/elections.json"),
-        model_factory=Election.from_dict,
+    issue_store = JSONStore[Issue](
+        path=Path(DATA_PATH + str(user.id) + "/elections.json"),
+        model_factory=Issue.from_dict,
         dictify=lambda e: e.to_dict()
     )
     vote_store = JSONStore[Vote](
-        path=Path(DATA_PATH + user.id + "/votes.json"),
+        path=Path(DATA_PATH + str(user.id) + "/votes.json"),
         model_factory=Vote.from_dict,
         dictify=lambda v: v.to_dict()
     )
@@ -46,18 +39,18 @@ def main() -> None:
 
     worker: Optional[IPv8Thread] = None
 
-    def broadcast_new_election(e: Election) -> None:
+    def broadcast_new_issue(e: Issue) -> None:
         if worker is not None:
-            worker.broadcastElection.emit(e)
+            worker.broadcastIssue.emit(e)
 
     def broadcast_new_vote(v: Vote) -> None:
         if worker is not None:
             worker.broadcastVote.emit(v)
 
-    window = Application(user, election_store, vote_store, broadcast_new_election, broadcast_new_vote)
+    window = Application(user, issue_store, vote_store, broadcast_new_issue, broadcast_new_vote)
 
     # Start IPv8 in QThread
-    worker = IPv8Thread(user.id, election_store, vote_store)
+    worker = IPv8Thread(user.id, issue_store, vote_store)
     worker.dataChanged.connect(window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection)
     worker.error.connect(lambda msg: print("IPv8 error:", msg), type=Qt.ConnectionType.QueuedConnection)
     worker.startedOk.connect(lambda: print("IPv8 started"), type=Qt.ConnectionType.QueuedConnection)
