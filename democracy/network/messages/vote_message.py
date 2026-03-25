@@ -3,9 +3,9 @@ from uuid import UUID
 
 from ipv8.messaging.payload_dataclass import DataClassPayload
 
-from messages.base_message import BaseMessage
-from models.utils import parse_datetime
-from models.vote import Vote
+from democracy.network.messages.base_message import BaseMessage
+from democracy.models.utils import parse_datetime
+from democracy.models.vote import Vote
 
 
 @dataclass

@@ -5,13 +5,13 @@ from ipv8.lazy_community import lazy_wrapper
 from ipv8.peer import Peer
 
 from config import COMMUNICATION_INTERVAL
-from constants import COMMUNITY_ID
-from messages.base_message import BaseMessage
-from messages.issue_message import IssueMessage
-from messages.vote_message import VoteMessage
-from models.issue import Issue
-from models.vote import Vote
-from storage.json_store import JSONStore
+from democracy.constants import COMMUNITY_ID
+from democracy.network.messages.base_message import BaseMessage
+from democracy.network.messages.issue_message import IssueMessage
+from democracy.network.messages.vote_message import VoteMessage
+from democracy.models.issue import Issue
+from democracy.models.vote import Vote
+from democracy.storage.json_store import JSONStore
 
 TModel = TypeVar("TModel")
 TMsg = TypeVar("TMsg", bound=BaseMessage)

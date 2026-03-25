@@ -6,8 +6,8 @@ from uuid import UUID
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QColor
 
-from constants import ISSUE_THRESHOLD
-from models.DTOs.issue_with_votes import IssueWithVotes
+from democracy.constants import ISSUE_THRESHOLD
+from democracy.models.DTOs.issue_with_votes import IssueWithVotes
 
 
 class IssueTableModel(QAbstractTableModel):

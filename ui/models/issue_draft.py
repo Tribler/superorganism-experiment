@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 
-from constants import ISSUE_TITLE_MIN_LENGTH, ISSUE_TITLE_MAX_LENGTH, ISSUE_DESCRIPTION_MIN_LENGTH, \
+from ui.constants import (
+    ISSUE_TITLE_MIN_LENGTH,
+    ISSUE_TITLE_MAX_LENGTH,
+    ISSUE_DESCRIPTION_MIN_LENGTH,
     ISSUE_DESCRIPTION_MAX_LENGTH
+)
 
 
 @dataclass(frozen=True)

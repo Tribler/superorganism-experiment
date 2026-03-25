@@ -8,11 +8,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from config import DATA_PATH
-from models.issue import Issue
-from models.person import Person
-from models.vote import Vote
-from network.ipv8_thread import IPv8Thread
-from storage.json_store import JSONStore
+from democracy.models.issue import Issue
+from democracy.models.person import Person
+from democracy.models.vote import Vote
+from democracy.network.ipv8_thread import IPv8Thread
+from democracy.storage.json_store import JSONStore
 from ui.app import Application
 
 # -----------------------------

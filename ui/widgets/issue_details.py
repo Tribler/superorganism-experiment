@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy,
 )
 
-from models.DTOs.issue_with_votes import IssueWithVotes
-from models.solution import Solution
+from democracy.models.DTOs.issue_with_votes import IssueWithVotes
+from democracy.models.solution import Solution
 
 
 class VotePanel(QFrame):

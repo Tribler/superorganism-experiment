@@ -13,7 +13,10 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 
-from constants import ISSUE_TITLE_MAX_LENGTH, ISSUE_DESCRIPTION_MAX_LENGTH
+from ui.constants import (
+    ISSUE_TITLE_MAX_LENGTH,
+    ISSUE_DESCRIPTION_MAX_LENGTH
+)
 from ui.models.issue_draft import IssueDraft
 
 

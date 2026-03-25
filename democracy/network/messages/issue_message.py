@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from uuid import uuid4, UUID
+from uuid import UUID
 
 from ipv8.messaging.payload_dataclass import DataClassPayload
 
-from messages.base_message import BaseMessage
-from models.issue import Issue
-from models.utils import parse_datetime
+from democracy.network.messages.base_message import BaseMessage
+from democracy.models.issue import Issue
+from democracy.models.utils import parse_datetime
 
 
 @dataclass
