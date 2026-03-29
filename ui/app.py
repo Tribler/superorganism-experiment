@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 
-from uuid import uuid4, UUID
+from uuid import UUID
 from typing import TYPE_CHECKING, Callable, Optional
 
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
-    QVBoxLayout,
     QHBoxLayout,
-    QFrame,
-    QPushButton,
-    QLabel,
-    QLineEdit,
-    QComboBox,
     QStackedWidget
 )
 
@@ -29,7 +23,8 @@ from ui.models.issue_draft import IssueDraft
 from ui.widgets.create_issue_overlay import CreateIssueOverlay
 from ui.widgets.fleet_widget import FleetWidget
 from ui.widgets.issue_details import IssueDetailWidget
-from ui.widgets.issue_table import IssueTableWidget
+from ui.widgets.issue_overview import IssuesOverviewWidget
+from ui.widgets.sidebar import SidebarWidget
 from ui.widgets.torrents_widget import TorrentsWidget
 
 if TYPE_CHECKING:
@@ -83,20 +78,29 @@ class Application(QMainWindow):
         self._refresh_timer.timeout.connect(self._do_refresh)
 
         root = QWidget()
+        root.setObjectName("appRoot")
         self.setCentralWidget(root)
 
         root_layout = QHBoxLayout(root)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        sidebar = self._build_sidebar()
+        self.sidebar = SidebarWidget()
 
         self.content_stack = QStackedWidget()
+        self.content_stack.setObjectName("contentStackHost")
 
-        self.dashboard_page = self._build_dashboard_page()
+        self.issues_page = IssuesOverviewWidget()
+
+        self.issues_page.create_clicked.connect(self._open_create_overlay)
+        self.issues_page.search_changed.connect(self._on_search_changed)
+        self.issues_page.filter_changed.connect(self._on_filter_changed)
+        self.issues_page.issue_selected.connect(self._on_select)
+        self.issues_page.issue_activated.connect(self._open_issue_details)
+
         self.issue_detail_page = IssueDetailWidget()
 
-        self.issue_detail_page.back_clicked.connect(self._show_dashboard_page)
+        self.issue_detail_page.back_clicked.connect(self._show_issues_page)
         self.issue_detail_page.approved.connect(self._on_vote)
         self.issue_detail_page.solution_voted.connect(self._on_solution_vote)
         self.issue_detail_page.solution_details_requested.connect(self._on_solution_details)
@@ -104,19 +108,23 @@ class Application(QMainWindow):
         self.torrents_page = TorrentsWidget()
         self.fleet_page = FleetWidget()
 
-        self.content_stack.addWidget(self.dashboard_page)
-        self.content_stack.addWidget(self.issue_detail_page)
         self.content_stack.addWidget(self.torrents_page)
         self.content_stack.addWidget(self.fleet_page)
+        self.content_stack.addWidget(self.issues_page)
+        self.content_stack.addWidget(self.issue_detail_page)
 
-        root_layout.addWidget(sidebar)
+        root_layout.addWidget(self.sidebar)
         root_layout.addWidget(self.content_stack, 1)
 
-        self.content_stack.setCurrentWidget(self.dashboard_page)
+        self.content_stack.setCurrentWidget(self.issues_page)
 
-        self.dashboard_btn.clicked.connect(self._show_dashboard_page)
-        self.torrents_btn.clicked.connect(self._show_torrents_page)
-        self.fleet_btn.clicked.connect(self._show_fleet_page)
+        self.sidebar.torrents_clicked.connect(self._show_torrents_page)
+        self.sidebar.fleet_clicked.connect(self._show_fleet_page)
+        self.sidebar.issues_clicked.connect(self._show_issues_page)
+        self.sidebar.my_issues_clicked.connect(lambda: print("My Issues clicked"))
+        self.sidebar.voting_history_clicked.connect(lambda: print("Voting History clicked"))
+        self.sidebar.settings_clicked.connect(lambda: print("Settings clicked"))
+        self.sidebar.create_clicked.connect(self._open_create_overlay)
 
         health_thread.dataChanged.connect(
             self._on_health_data_changed, type=Qt.ConnectionType.QueuedConnection
@@ -151,172 +159,9 @@ class Application(QMainWindow):
             ),
         ]
 
-    def _build_sidebar(self) -> QWidget:
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(260)
-
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(18, 90, 18, 18)
-        layout.setSpacing(12)
-
-        self.torrents_btn = QPushButton("Torrents")
-        self.fleet_btn = QPushButton("Fleet")
-
-        self.dashboard_btn = QPushButton("Dashboard")
-        self.dashboard_btn.setObjectName("navActive")
-
-        self.my_proposals_btn = QPushButton("My Issues")
-        self.voting_history_btn = QPushButton("Voting History")
-        self.settings_btn = QPushButton("Settings")
-
-        for btn in [
-            self.torrents_btn,
-            self.fleet_btn,
-            self.dashboard_btn,
-            self.my_proposals_btn,
-            self.voting_history_btn,
-            self.settings_btn,
-        ]:
-            btn.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(__import__("PyQt6.QtCore").QtCore, "Qt") else btn.cursor())
-
-        layout.addWidget(self.torrents_btn)
-        layout.addWidget(self.fleet_btn)
-        layout.addWidget(self.dashboard_btn)
-        layout.addWidget(self.my_proposals_btn)
-        layout.addWidget(self.voting_history_btn)
-        layout.addWidget(self.settings_btn)
-        layout.addStretch()
-
-        return sidebar
-
-    def _build_dashboard_page(self) -> QWidget:
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 28)
-        layout.setSpacing(22)
-
-        header = QHBoxLayout()
-        self.title_label = QLabel("Community Governance Dashboard")
-        self.title_label.setObjectName("pageTitle")
-
-        self.create_btn = QPushButton("Create New Issue")
-        self.create_btn.setObjectName("primaryButton")
-        self.create_btn.clicked.connect(self._open_create_overlay)
-
-        header.addWidget(self.title_label)
-        header.addStretch()
-        header.addWidget(self.create_btn)
-
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(14)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search")
-        self.search_input.textChanged.connect(self._on_search_changed)
-
-        self.filter_combo = QComboBox()
-        self.filter_combo.addItems(["All", "Open", "Passed", "Needs Votes"])
-        self.filter_combo.currentTextChanged.connect(self._on_filter_changed)
-
-        toolbar.addWidget(self.search_input, 1)
-        toolbar.addStretch()
-        toolbar.addWidget(QLabel("Filter by:"))
-        toolbar.addWidget(self.filter_combo)
-
-        table_card = QFrame()
-        table_card.setObjectName("tableCard")
-        table_layout = QVBoxLayout(table_card)
-        table_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.issue_table = IssueTableWidget()
-        self.issue_table.selected.connect(self._on_select)
-        self.issue_table.activated.connect(self._open_issue_details)
-
-        table_layout.addWidget(self.issue_table)
-
-        layout.addLayout(header)
-        layout.addLayout(toolbar)
-        layout.addWidget(table_card, 1)
-
-        return content
-
     def _apply_styles(self) -> None:
-        self.setStyleSheet("""
-            QMainWindow {
-                background: #0b1220;
-            }
-
-            #sidebar {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #1a2433,
-                    stop:1 #111827
-                );
-                border-right: 1px solid rgba(255,255,255,0.08);
-            }
-
-            QLabel {
-                color: #e5e7eb;
-                font-size: 14px;
-            }
-
-            #pageTitle {
-                font-size: 28px;
-                font-weight: 700;
-                color: white;
-            }
-
-            QPushButton {
-                background: transparent;
-                color: #cbd5e1;
-                border: none;
-                border-radius: 12px;
-                padding: 14px 16px;
-                text-align: left;
-                font-size: 15px;
-            }
-
-            QPushButton:hover {
-                background: rgba(255,255,255,0.06);
-            }
-
-            QPushButton#navActive {
-                background: rgba(255,255,255,0.10);
-                color: white;
-                font-weight: 600;
-            }
-
-            QPushButton#primaryButton {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #3b82f6,
-                    stop:1 #2563eb
-                );
-                color: white;
-                font-weight: 600;
-                padding: 14px 22px;
-            }
-
-            QPushButton#primaryButton:hover {
-                background: #3b82f6;
-            }
-
-            QLineEdit, QComboBox {
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,255,255,0.10);
-                border-radius: 12px;
-                padding: 12px 14px;
-                color: white;
-                min-height: 22px;
-            }
-
-            #tableCard {
-                background: rgba(255,255,255,0.02);
-                border: 1px solid rgba(255,255,255,0.10);
-                border-radius: 16px;
-            }
-        """)
+        with open("ui/styles/main.qss", "r") as f:
+            self.setStyleSheet(f.read())
 
     # -----------------------------
     # Refresh API
@@ -325,7 +170,7 @@ class Application(QMainWindow):
         """
         Immediate refresh (useful for local UI actions).
         """
-        self.issue_table.load(self.repo.get_all())
+        self.issues_page.load(self.repo.get_all())
 
         current_id = self.issue_detail_page.current_issue_id
         if current_id:
@@ -356,10 +201,10 @@ class Application(QMainWindow):
         self.create_issue_overlay.open_overlay()
 
     def _on_search_changed(self, text: str) -> None:
-        self.issue_table.set_search_text(text)
+        self.issues_page.apply_search_filter(text)
 
     def _on_filter_changed(self, value: str) -> None:
-        self.issue_table.set_filter_mode(value)
+        self.issues_page.apply_status_filter(value)
 
     # -----------------------------
     # Handlers
@@ -426,16 +271,12 @@ class Application(QMainWindow):
     def _on_solution_details(self, issue_id: UUID, solution_id: str) -> None:
         print(f"Open details for solution {solution_id} of issue {issue_id}")
 
-    def _set_active_nav(self, active_btn: QPushButton) -> None:
-        for btn in (self.dashboard_btn, self.torrents_btn, self.fleet_btn,
-                    self.my_proposals_btn, self.voting_history_btn, self.settings_btn):
-            btn.setObjectName("navActive" if btn is active_btn else "nav")
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+    def _set_active_nav(self, active_name: str) -> None:
+        self.sidebar.set_active_by_name(active_name)
 
-    def _show_dashboard_page(self) -> None:
-        self._set_active_nav(self.dashboard_btn)
-        self.content_stack.setCurrentWidget(self.dashboard_page)
+    def _show_issues_page(self) -> None:
+        self._set_active_nav("issues")
+        self.content_stack.setCurrentWidget(self.issues_page)
 
     def _show_issue_detail_page(self, issue_id: UUID) -> None:
         issue = self.repo.get(issue_id)
@@ -446,15 +287,15 @@ class Application(QMainWindow):
             issue,
             self._mock_solutions_for_issue(issue.issue),
         )
-        self._set_active_nav(self.dashboard_btn)
+        self._set_active_nav("issues")
         self.content_stack.setCurrentWidget(self.issue_detail_page)
 
     def _show_torrents_page(self) -> None:
-        self._set_active_nav(self.torrents_btn)
+        self._set_active_nav("torrents")
         self.content_stack.setCurrentWidget(self.torrents_page)
 
     def _show_fleet_page(self) -> None:
-        self._set_active_nav(self.fleet_btn)
+        self._set_active_nav("fleet")
         self.content_stack.setCurrentWidget(self.fleet_page)
 
     def _on_health_data_changed(self) -> None:

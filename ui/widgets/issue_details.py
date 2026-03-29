@@ -12,7 +12,8 @@ from PyQt6.QtWidgets import (
     QFrame,
     QVBoxLayout,
     QHBoxLayout,
-    QScrollArea, QSizePolicy,
+    QScrollArea,
+    QSizePolicy,
 )
 
 from democracy.models.DTOs.issue_with_votes import IssueWithVotes
@@ -22,7 +23,7 @@ from democracy.models.solution import Solution
 class VotePanel(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setObjectName("votePanel")
+        self.setProperty("variant", "vote-panel")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
@@ -30,15 +31,15 @@ class VotePanel(QFrame):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.arrow_lbl = QLabel("^")
-        self.arrow_lbl.setObjectName("voteArrow")
+        self.arrow_lbl.setProperty("role", "vote-arrow")
         self.arrow_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.vote_count_lbl = QLabel("0")
-        self.vote_count_lbl.setObjectName("voteCount")
+        self.vote_count_lbl.setProperty("role", "vote-count")
         self.vote_count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.vote_caption_lbl = QLabel("Upvotes")
-        self.vote_caption_lbl.setObjectName("voteCaption")
+        self.vote_caption_lbl.setProperty("role", "vote-caption")
         self.vote_caption_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(self.arrow_lbl)
@@ -57,7 +58,7 @@ class SolutionCard(QFrame):
         super().__init__(parent)
         self.solution = solution
 
-        self.setObjectName("solutionCard")
+        self.setProperty("variant", "solution-card")
         self.setProperty("highlighted", solution.highlighted)
 
         outer = QHBoxLayout(self)
@@ -65,7 +66,7 @@ class SolutionCard(QFrame):
         outer.setSpacing(0)
 
         accent = QFrame()
-        accent.setObjectName("solutionAccent")
+        accent.setProperty("role", "solution-accent")
         accent.setFixedWidth(5)
         outer.addWidget(accent)
 
@@ -79,11 +80,11 @@ class SolutionCard(QFrame):
         left_col.setSpacing(10)
 
         title_lbl = QLabel(solution.title)
-        title_lbl.setObjectName("solutionTitle")
+        title_lbl.setProperty("role", "solution-title")
         title_lbl.setWordWrap(True)
 
         desc_lbl = QLabel(solution.description)
-        desc_lbl.setObjectName("solutionDescription")
+        desc_lbl.setProperty("role", "solution-description")
         desc_lbl.setWordWrap(True)
 
         meta_row = QHBoxLayout()
@@ -91,11 +92,11 @@ class SolutionCard(QFrame):
         meta_row.setSpacing(16)
 
         details_btn = QPushButton("View Details")
-        details_btn.setObjectName("linkButton")
+        details_btn.setProperty("variant", "link")
         details_btn.clicked.connect(lambda: self.details_requested.emit(self.solution.id))
 
         status_lbl = QLabel(solution.status_text)
-        status_lbl.setObjectName("solutionStatus")
+        status_lbl.setProperty("role", "solution-status")
 
         meta_row.addWidget(details_btn)
         meta_row.addWidget(status_lbl)
@@ -111,15 +112,15 @@ class SolutionCard(QFrame):
         right_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         votes_lbl = QLabel(str(solution.votes))
-        votes_lbl.setObjectName("solutionVotes")
+        votes_lbl.setProperty("role", "solution-votes")
         votes_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         votes_caption_lbl = QLabel("Votes")
-        votes_caption_lbl.setObjectName("solutionVotesCaption")
+        votes_caption_lbl.setProperty("role", "solution-votes-caption")
         votes_caption_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         vote_btn = QPushButton("Vote for this solution")
-        vote_btn.setObjectName("voteSolutionButton")
+        vote_btn.setProperty("variant", "outline-accent")
         vote_btn.clicked.connect(lambda: self.voted.emit(self.solution.id))
 
         right_col.addWidget(votes_lbl)
@@ -146,11 +147,10 @@ class IssueDetailWidget(QWidget):
         self._current_issue: Optional[IssueWithVotes] = None
 
         self._build_ui()
-        self._apply_styles()
         self._set_enabled(False)
 
     def _build_ui(self) -> None:
-        self.setObjectName("issueDetailWidget")
+        self.setProperty("role", "issue-detail-page")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -160,7 +160,7 @@ class IssueDetailWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setObjectName("detailScroll")
+        scroll.setProperty("role", "detail-scroll")
 
         content = QWidget()
         page = QVBoxLayout(content)
@@ -172,7 +172,7 @@ class IssueDetailWidget(QWidget):
         back_row.setSpacing(0)
 
         self.back_btn = QPushButton("← Back to issues")
-        self.back_btn.setObjectName("backLinkButton")
+        self.back_btn.setProperty("variant", "back-link")
         self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.back_btn.clicked.connect(self.back_clicked.emit)
 
@@ -192,8 +192,7 @@ class IssueDetailWidget(QWidget):
         self.meta_row.setSpacing(6)
 
         self.status_badge = QLabel("OPEN")
-        self.status_badge.setObjectName("statusBadge")
-
+        self.status_badge.setProperty("role", "status-badge")
         self.status_badge.setSizePolicy(
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Fixed
@@ -201,7 +200,7 @@ class IssueDetailWidget(QWidget):
         self.status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.issue_id_lbl = QLabel("")
-        self.issue_id_lbl.setObjectName("issueIdLabel")
+        self.issue_id_lbl.setProperty("role", "issue-id")
         self.issue_id_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self.meta_row.addWidget(self.status_badge, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -209,7 +208,7 @@ class IssueDetailWidget(QWidget):
         self.meta_row.addStretch()
 
         self.title_lbl = QLabel("")
-        self.title_lbl.setObjectName("issueTitle")
+        self.title_lbl.setProperty("role", "issue-title")
         self.title_lbl.setWordWrap(True)
         self.title_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
@@ -218,18 +217,18 @@ class IssueDetailWidget(QWidget):
         self.title_meta_row.setSpacing(3)
 
         self.created_by_lbl = QLabel("Created by")
-        self.created_by_lbl.setObjectName("titleMeta")
+        self.created_by_lbl.setProperty("role", "title-meta")
 
         self.creator_btn = QPushButton("")
-        self.creator_btn.setObjectName("creatorLinkButton")
+        self.creator_btn.setProperty("variant", "creator-link")
         self.creator_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.creator_btn.clicked.connect(self._on_creator_clicked)
 
         self.title_meta_dot_lbl = QLabel("•")
-        self.title_meta_dot_lbl.setObjectName("titleMeta")
+        self.title_meta_dot_lbl.setProperty("role", "title-meta")
 
         self.created_at_meta_lbl = QLabel("")
-        self.created_at_meta_lbl.setObjectName("titleMeta")
+        self.created_at_meta_lbl.setProperty("role", "title-meta")
 
         self.title_meta_row.addWidget(self.created_by_lbl)
         self.title_meta_row.addWidget(self.creator_btn)
@@ -247,13 +246,13 @@ class IssueDetailWidget(QWidget):
         header_row.addWidget(self.vote_panel, 0, Qt.AlignmentFlag.AlignTop)
 
         self.desc_lbl = QLabel("")
-        self.desc_lbl.setObjectName("issueDescription")
+        self.desc_lbl.setProperty("role", "issue-description")
         self.desc_lbl.setWordWrap(True)
         self.desc_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.desc_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         self.approve_btn = QPushButton("Approve Issue")
-        self.approve_btn.setObjectName("approveButton")
+        self.approve_btn.setProperty("variant", "primary-accent")
         self.approve_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.approve_btn.clicked.connect(self._vote_issue)
 
@@ -268,10 +267,10 @@ class IssueDetailWidget(QWidget):
         solutions_header.setSpacing(10)
 
         solutions_title = QLabel("Proposed Solutions")
-        solutions_title.setObjectName("sectionTitle")
+        solutions_title.setProperty("role", "section-title")
 
         self.solutions_count_lbl = QLabel("0 Solutions Active")
-        self.solutions_count_lbl.setObjectName("sectionMeta")
+        self.solutions_count_lbl.setProperty("role", "section-meta")
 
         solutions_header.addWidget(solutions_title)
         solutions_header.addStretch()
@@ -294,294 +293,6 @@ class IssueDetailWidget(QWidget):
 
         scroll.setWidget(content)
         root.addWidget(scroll)
-
-    def _apply_styles(self) -> None:
-        self.setStyleSheet("""
-            QWidget#issueDetailWidget {
-                background: #0b1220;
-                color: #e5e7eb;
-            }
-
-            QLabel#statusBadge {
-                background-color: rgba(139, 92, 246, 0.12);
-                color: #c4b5fd;
-                border: 1px solid rgba(139, 92, 246, 0.35);
-                border-radius: 10px;
-                padding-left: 10px;
-                padding-right: 10px;
-                min-height: 20px;
-                max-height: 20px;
-                font-size: 9px;
-                font-weight: 800;
-                letter-spacing: 1.2px;
-            }
-
-            QLabel#issueIdLabel {
-                color: #94a3b8;
-                font-size: 12px;
-                font-weight: 600;
-                letter-spacing: 1px;
-            }
-
-            QLabel#issueTitle {
-                color: white;
-                margin: 0;
-                padding: 0;
-                font-size: 50px;
-                font-weight: 800;
-                line-height: 1.15;
-            }
-
-            QFrame#votePanel {
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                border-radius: 18px;
-                min-width: 160px;
-            }
-
-            QLabel#voteCount {
-                color: white;
-                font-size: 30px;
-                font-weight: 800;
-            }
-
-            QLabel#voteCaption {
-                color: #94a3b8;
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1.2px;
-                text-transform: uppercase;
-            }
-
-            QLabel#sectionTitle {
-                color: white;
-                font-size: 20px;
-                font-weight: 800;
-            }
-
-            QLabel#sectionMeta {
-                color: #94a3b8;
-                font-size: 13px;
-                font-weight: 500;
-            }
-
-            QLabel#issueDescription {
-                background: transparent;
-                color: #cbd5e1;
-                font-size: 16px;
-                line-height: 1.7;
-                margin: 0;
-                padding: 0;
-            }
-
-            QLabel#metaInfo {
-                color: #94a3b8;
-                font-size: 12px;
-            }
-
-            QFrame#solutionCard {
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 18px;
-            }
-
-            QFrame#solutionCard:hover {
-                background: rgba(255, 255, 255, 0.05);
-            }
-
-            QFrame#solutionAccent {
-                background: rgba(148, 163, 184, 0.18);
-                border-top-left-radius: 18px;
-                border-bottom-left-radius: 18px;
-            }
-
-            QFrame#solutionCard[highlighted="true"] QFrame#solutionAccent {
-                background: #8b5cf6;
-            }
-
-            QLabel#solutionTitle {
-                color: white;
-                font-size: 20px;
-                font-weight: 800;
-            }
-
-            QLabel#solutionDescription {
-                color: #cbd5e1;
-                font-size: 14px;
-                line-height: 1.5;
-            }
-
-            QPushButton#linkButton {
-                background: transparent;
-                border: none;
-                color: #a78bfa;
-                padding: 0;
-                font-size: 13px;
-                font-weight: 700;
-                text-align: left;
-            }
-
-            QPushButton#linkButton:hover {
-                color: #c4b5fd;
-                text-decoration: underline;
-            }
-
-            QLabel#solutionStatus {
-                color: #94a3b8;
-                font-size: 12px;
-            }
-
-            QLabel#solutionVotes {
-                color: white;
-                font-size: 28px;
-                font-weight: 800;
-            }
-
-            QLabel#solutionVotesCaption {
-                color: #94a3b8;
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1.2px;
-                text-transform: uppercase;
-            }
-
-            QPushButton#voteSolutionButton {
-                background: transparent;
-                color: #a78bfa;
-                border: 1px solid rgba(139, 92, 246, 0.4);
-                border-radius: 12px;
-                padding: 12px 18px;
-                font-size: 13px;
-                font-weight: 700;
-                text-align: center;
-            }
-
-            QPushButton#voteSolutionButton:hover {
-                background: rgba(139, 92, 246, 0.10);
-            }
-
-            QScrollArea#detailScroll {
-                border: none;
-                background: transparent;
-            }
-
-            QScrollBar:vertical {
-                background: transparent;
-                width: 10px;
-                margin: 0;
-            }
-
-            QScrollBar::handle:vertical {
-                background: rgba(148, 163, 184, 0.35);
-                border-radius: 5px;
-                min-height: 24px;
-            }
-
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical,
-            QScrollBar::add-page:vertical,
-            QScrollBar::sub-page:vertical {
-                background: none;
-                border: none;
-            }
-            
-            QPushButton#backLinkButton {
-                background: transparent;
-                border: none;
-                color: #8b5cf6;
-                padding: 0;
-                font-size: 13px;
-                font-weight: 500;
-                text-align: left;
-            }
-
-            QPushButton#backLinkButton:hover {
-                color: #a78bfa;
-            }
-
-            QPushButton#backLinkButton:pressed {
-                color: #c4b5fd;
-            }
-            
-            QLabel#titleMeta {
-                color: #94a3b8;
-                font-size: 13px;
-                font-weight: 500;
-            }
-            
-            QPushButton#creatorLinkButton {
-                background: transparent;
-                border: none;
-                color: #b6a0ff;
-                padding: 0;
-                margin: 0;
-                font-size: 13px;
-                font-weight: 600;
-                text-align: left;
-            }
-            
-            QPushButton#creatorLinkButton:hover {
-                color: #c4b5fd;
-                text-decoration: underline;
-            }
-            
-            QPushButton#creatorLinkButton:pressed {
-                color: #ddd6fe;
-            }
-            
-            QFrame#votePanel {
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                border-radius: 18px;
-                min-width: 120px;
-            }
-            
-            QLabel#voteArrow {
-                color: #8b5cf6;
-                font-size: 24px;
-                font-weight: 500;
-                margin: 0;
-                padding: 0;
-            }
-            
-            QLabel#voteCount {
-                color: white;
-                font-size: 28px;
-                font-weight: 800;
-            }
-            
-            QLabel#voteCaption {
-                color: #94a3b8;
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1.2px;
-                text-transform: uppercase;
-            }
-            
-            QPushButton#approveButton {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #7c3aed,
-                    stop:1 #6366f1
-                );
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 12px 18px;
-                font-size: 13px;
-                font-weight: 700;
-                text-align: center;
-            }
-            
-            QPushButton#approveButton:hover:!disabled {
-                background: #8b5cf6;
-            }
-            
-            QPushButton#approveButton:disabled {
-                background: rgba(255, 255, 255, 0.10);
-                color: rgba(255, 255, 255, 0.45);
-            }
-        """)
 
     def _clear_solutions(self) -> None:
         while self.solutions_layout.count():

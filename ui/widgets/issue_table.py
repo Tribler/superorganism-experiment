@@ -3,10 +3,7 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from PyQt6.QtCore import (
-    Qt,
-    pyqtSignal,
-)
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPainter
 from PyQt6.QtWidgets import (
     QWidget,
@@ -15,12 +12,13 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionProgressBar,
     QStyle,
-    QApplication,
+    QApplication, QHeaderView,
 )
 
 from democracy.models.DTOs.issue_with_votes import IssueWithVotes
 from ui.widgets.issue_table_model import IssueTableModel
 from ui.widgets.issue_filter_proxy_model import IssueFilterProxyModel
+from ui.widgets.table_utils import apply_shared_table_config
 
 
 class ProgressDelegate(QStyledItemDelegate):
@@ -41,7 +39,11 @@ class ProgressDelegate(QStyledItemDelegate):
         progress.progress = max(0, min(100, percent))
         progress.textVisible = False
 
-        QApplication.style().drawControl(QStyle.ControlElement.CE_ProgressBar, progress, painter)
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar,
+            progress,
+            painter,
+        )
 
 
 class IssueTableWidget(QWidget):
@@ -50,6 +52,7 @@ class IssueTableWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.setProperty("role", "issue-table-widget")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -59,46 +62,26 @@ class IssueTableWidget(QWidget):
         self.proxy.setSourceModel(self.model)
 
         self.table = QTableView()
+        self.table.setProperty("variant", "data-table")
         self.table.setModel(self.proxy)
-        self.table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(False)
-        self.table.setShowGrid(False)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSortingEnabled(False)
-        self.table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
-        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+        apply_shared_table_config(self.table)
 
         self.table.setItemDelegateForColumn(5, ProgressDelegate(self.table))
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(True)
+
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.table.doubleClicked.connect(self._on_double_clicked)
         self.table.activated.connect(self._on_double_clicked)
 
         layout.addWidget(self.table)
 
-        self.table.setStyleSheet("""
-            QTableView {
-                background: transparent;
-                color: white;
-                border: none;
-                gridline-color: transparent;
-                selection-background-color: rgba(59,130,246,0.18);
-                selection-color: white;
-            }
-
-            QHeaderView::section {
-                background: rgba(148,163,184,0.35);
-                color: white;
-                border: none;
-                padding: 16px 14px;
-                font-weight: 600;
-            }
-        """)
-
     def load(self, issues: list[IssueWithVotes]) -> None:
         self.model.set_issues(issues)
         self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setStretchLastSection(True)
 
     def set_search_text(self, text: str) -> None:
         self.proxy.set_search_text(text)
