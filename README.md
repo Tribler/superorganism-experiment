@@ -2,6 +2,7 @@
 We are creating our own society. A place citizens have FULL control, have their own MONEY, have AI that serves THEM, and CONTROL together. Unstoppable by design, self-replicating, self-hosted, self-evolving, and human oversight with democratic governance. Well, that is our Utopian dream! It now runs and empowers a network of _seedboxes_.
 
 Our work contains several novelties: 
+- ⏩ Streaming Torrents. Quality streaming in P2P, competitive to Tiktok/Youtube/Netflix {warning:requires integration of Egbert code}.
 - 🪞 Self-replication. Servers that can buy other servers using Bitcoin. Fully automated cloning of servers.
 - ⚡ Trust. First trust framework and true Peer-to-Peer agent communication fabric. No DNS, no central control.
 - 🧑‍🚒 AI models in a real-time competition for survival of the fittest using multi-arm-bandit and model score gossip.
