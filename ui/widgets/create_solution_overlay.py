@@ -14,67 +14,21 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.constants import (
-    ISSUE_TITLE_MAX_LENGTH,
-    ISSUE_DESCRIPTION_MAX_LENGTH
+    SOLUTION_TITLE_MAX_LENGTH,
+    SOLUTION_DESCRIPTION_MAX_LENGTH,
 )
-from ui.models.issue_draft import IssueDraft
+from ui.models.solution_draft import SolutionDraft
+from ui.widgets.create_issue_overlay import FieldBlock, ButtonBlock
 
 
-class FieldBlock(QWidget):
-    def __init__(
-        self,
-        title: str,
-        input_widget: QWidget,
-        error_label: QLabel,
-        counter_label: QLabel,
-        parent: QWidget | None = None,
-    ):
-        super().__init__(parent)
-
-        self.setProperty("role", "field-block")
-
-        self.label = QLabel(title)
-        self.label.setProperty("role", "field-label")
-
-        meta_row = QHBoxLayout()
-        meta_row.setContentsMargins(0, 0, 0, 0)
-        meta_row.setSpacing(8)
-        meta_row.addWidget(error_label, 1)
-        meta_row.addWidget(counter_label, 0)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        layout.addWidget(self.label)
-        layout.addWidget(input_widget)
-        layout.addLayout(meta_row)
-
-class ButtonBlock(QWidget):
-    def __init__(
-        self,
-        primary_button: QPushButton,
-        secondary_button: QPushButton,
-        parent: QWidget | None = None,
-    ):
-        super().__init__(parent)
-
-        self.setProperty("role", "button-block")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addWidget(primary_button)
-        layout.addWidget(secondary_button)
-
-
-class CreateIssueOverlay(QWidget):
-    created = pyqtSignal(IssueDraft)
+class CreateSolutionOverlay(QWidget):
+    created = pyqtSignal(SolutionDraft)
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setObjectName("createIssueOverlay")
+        self.setObjectName("createSolutionOverlay")
         self.hide()
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -122,14 +76,14 @@ class CreateIssueOverlay(QWidget):
         card_layout.setContentsMargins(30, 30, 30, 28)
         card_layout.setSpacing(16)
 
-        self.title_label = QLabel("Create New Issue Proposal")
+        self.title_label = QLabel("Propose New Solution")
         self.title_label.setProperty("role", "dialog-title")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.title_edit = QLineEdit()
         self.title_edit.setProperty("variant", "default")
         self.title_edit.setProperty("field-type", "single-line")
-        self.title_edit.setPlaceholderText("e.g., Improve vote review flow")
+        self.title_edit.setPlaceholderText("e.g., Add staged review before voting")
         self.title_edit.textChanged.connect(self._on_title_changed)
 
         self.title_error_label = QLabel("")
@@ -144,7 +98,7 @@ class CreateIssueOverlay(QWidget):
         self.description_edit.setProperty("variant", "default")
         self.description_edit.setProperty("field-type", "multi-line")
         self.description_edit.setPlaceholderText(
-            "Provide details about the issue, goals, and expected community impact..."
+            "Describe the solution proposal, how it works, and why it should be implemented..."
         )
         self.description_edit.setFixedHeight(140)
         self.description_edit.textChanged.connect(self._on_description_changed)
@@ -158,7 +112,7 @@ class CreateIssueOverlay(QWidget):
         self.description_counter_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.title_block = FieldBlock(
-            title="Issue Title",
+            title="Solution Title",
             input_widget=self.title_edit,
             error_label=self.title_error_label,
             counter_label=self.title_counter_label,
@@ -173,7 +127,7 @@ class CreateIssueOverlay(QWidget):
             parent=self.card,
         )
 
-        self.create_btn = QPushButton("Create Issue")
+        self.create_btn = QPushButton("Create Solution")
         self.create_btn.setProperty("variant", "primary")
         self.create_btn.clicked.connect(self._create)
 
@@ -242,8 +196,8 @@ class CreateIssueOverlay(QWidget):
         widget.style().polish(widget)
         widget.update()
 
-    def _current_draft(self) -> IssueDraft:
-        return IssueDraft(
+    def _current_draft(self) -> SolutionDraft:
+        return SolutionDraft(
             title=self.title_edit.text(),
             description=self.description_edit.toPlainText(),
         ).normalized()
@@ -266,7 +220,6 @@ class CreateIssueOverlay(QWidget):
 
         is_valid = not errors
         self.create_btn.setEnabled(is_valid)
-
         return is_valid
 
     def eventFilter(self, watched, event) -> bool:
@@ -304,18 +257,18 @@ class CreateIssueOverlay(QWidget):
         title_length = len(self.title_edit.text())
         description_length = len(self.description_edit.toPlainText())
 
-        self.title_counter_label.setText(f"{title_length}/{ISSUE_TITLE_MAX_LENGTH}")
+        self.title_counter_label.setText(f"{title_length}/{SOLUTION_TITLE_MAX_LENGTH}")
         self.description_counter_label.setText(
-            f"{description_length}/{ISSUE_DESCRIPTION_MAX_LENGTH}"
+            f"{description_length}/{SOLUTION_DESCRIPTION_MAX_LENGTH}"
         )
 
         self._set_counter_over_limit(
             self.title_counter_label,
-            title_length > ISSUE_TITLE_MAX_LENGTH,
+            title_length > SOLUTION_TITLE_MAX_LENGTH,
         )
         self._set_counter_over_limit(
             self.description_counter_label,
-            description_length > ISSUE_DESCRIPTION_MAX_LENGTH,
+            description_length > SOLUTION_DESCRIPTION_MAX_LENGTH,
         )
 
     def _on_title_changed(self) -> None:

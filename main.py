@@ -11,8 +11,10 @@ from PyQt6.QtWidgets import QApplication
 
 from config import DATA_PATH
 from democracy.models.issue import Issue
+from democracy.models.issue_vote import IssueVote
 from democracy.models.person import Person
-from democracy.models.vote import Vote
+from democracy.models.solution import Solution
+from democracy.models.solution_vote import SolutionVote
 from democracy.network.ipv8_thread import IPv8Thread
 from democracy.storage.json_store import JSONStore
 from healthchecker.db import init_db
@@ -27,15 +29,30 @@ def main() -> None:
     user = Person()  # Person generates a random ID by default
 
     # --- Data stores ---
+    base_path = Path(DATA_PATH) / str(user.id)
+
     issue_store = JSONStore[Issue](
-        path=Path(DATA_PATH + str(user.id) + "/elections.json"),
+        path=base_path / "issues.json",
         model_factory=Issue.from_dict,
-        dictify=lambda e: e.to_dict()
+        dictify=lambda i: i.to_dict()
     )
-    vote_store = JSONStore[Vote](
-        path=Path(DATA_PATH + str(user.id) + "/votes.json"),
-        model_factory=Vote.from_dict,
-        dictify=lambda v: v.to_dict()
+
+    solution_store = JSONStore[Solution](
+        path=base_path / "solutions.json",
+        model_factory=Solution.from_dict,
+        dictify=lambda s: s.to_dict()
+    )
+
+    issue_vote_store = JSONStore[IssueVote](
+        path=base_path / "issue_votes.json",
+        model_factory=IssueVote.from_dict,
+        dictify=lambda iv: iv.to_dict(),
+    )
+
+    solution_vote_store = JSONStore[SolutionVote](
+        path=base_path / "solution_votes.json",
+        model_factory=SolutionVote.from_dict,
+        dictify=lambda sv: sv.to_dict(),
     )
 
     # --- UI creation (main thread) ---
@@ -51,18 +68,37 @@ def main() -> None:
 
     worker: Optional[IPv8Thread] = None
 
-    def broadcast_new_issue(e: Issue) -> None:
+    def broadcast_new_issue(i: Issue) -> None:
         if worker is not None:
-            worker.broadcastIssue.emit(e)
+            worker.broadcastIssue.emit(i)
 
-    def broadcast_new_vote(v: Vote) -> None:
+    def broadcast_new_issue_vote(iv: IssueVote) -> None:
         if worker is not None:
-            worker.broadcastVote.emit(v)
+            worker.broadcastIssueVote.emit(iv)
 
-    window = Application(user, issue_store, vote_store, broadcast_new_issue, broadcast_new_vote, health_thread)
+    def broadcast_new_solution(s: Solution) -> None:
+        if worker is not None:
+            worker.broadcastSolution.emit(s)
+
+    def broadcast_new_solution_vote(sv: SolutionVote) -> None:
+        if worker is not None:
+            worker.broadcastSolutionVote.emit(sv)
+
+    window = Application(
+        user,
+        issue_store,
+        issue_vote_store,
+        solution_store,
+        solution_vote_store,
+        broadcast_new_issue,
+        broadcast_new_issue_vote,
+        broadcast_new_solution,
+        broadcast_new_solution_vote,
+        health_thread
+    )
 
     # Start IPv8 in QThread
-    worker = IPv8Thread(user.id, issue_store, vote_store)
+    worker = IPv8Thread(user.id, issue_store, issue_vote_store, solution_store, solution_vote_store)
     worker.dataChanged.connect(window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection)
     worker.error.connect(lambda msg: print("IPv8 error:", msg), type=Qt.ConnectionType.QueuedConnection)
     worker.startedOk.connect(lambda: print("IPv8 started"), type=Qt.ConnectionType.QueuedConnection)

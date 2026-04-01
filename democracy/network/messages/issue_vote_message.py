@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -5,18 +7,18 @@ from ipv8.messaging.payload_dataclass import DataClassPayload
 
 from democracy.network.messages.base_message import BaseMessage
 from democracy.models.utils import parse_datetime
-from democracy.models.vote import Vote
+from democracy.models.issue_vote import IssueVote
 
 
 @dataclass
-class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
+class IssueVoteMessage(DataClassPayload[2], BaseMessage[IssueVote]):
     """
-    Message to propagate vote data in JSON format.
+    Message to propagate issue vote data in JSON format.
 
     Attributes:
-        id (str): Unique identifier for the vote.
-        voter_id (str): Identifier of the voter who cast the vote.
+        voter_id (str): Identifier of the voter who cast the issue vote.
         issue_id (str): Identifier of the issue in which the vote was cast.
+        id (str): Unique identifier for the issue vote.
         created_at (str): Timestamp when the vote was created (in ISO format).
     """
     voter_id: str
@@ -25,14 +27,14 @@ class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
     created_at: str
 
     @property
-    def entity_id(self) -> str:
-        return self.id
+    def entity_id(self) -> UUID:
+        return UUID(self.id)
 
     def brief(self) -> str:
         return f"Vote(id={self.id})"
 
-    def to_model(self) -> Vote:
-        return Vote(
+    def to_model(self) -> IssueVote:
+        return IssueVote(
             voter_id=UUID(self.voter_id),
             issue_id=UUID(self.issue_id),
             id=UUID(self.id),
@@ -40,7 +42,7 @@ class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
         )
 
     @classmethod
-    def from_model(cls, vote: Vote) -> "VoteMessage":
+    def from_model(cls, vote: IssueVote) -> IssueVoteMessage:
         return cls(
             voter_id=str(vote.voter_id),
             issue_id=str(vote.issue_id),
@@ -49,4 +51,4 @@ class VoteMessage(DataClassPayload[2], BaseMessage[Vote]):
         )
 
 # Force schema generation once on import
-_ = VoteMessage(id="", voter_id="", issue_id="", created_at="")
+_ = IssueVoteMessage(id="", voter_id="", issue_id="", created_at="")

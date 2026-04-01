@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from democracy.models.DTOs.issue_with_votes import IssueWithVotes
-from democracy.models.solution import Solution
+from democracy.models.DTOs.solution_with_votes import SolutionWithVotes
 
 
 class VotePanel(QFrame):
@@ -51,15 +51,16 @@ class VotePanel(QFrame):
 
 
 class SolutionCard(QFrame):
-    voted = pyqtSignal(str)
-    details_requested = pyqtSignal(str)
+    voted = pyqtSignal(UUID)
+    details_requested = pyqtSignal(UUID)
 
-    def __init__(self, solution: Solution, parent: QWidget | None = None):
+    def __init__(self, solution_with_votes: SolutionWithVotes, parent: QWidget | None = None):
         super().__init__(parent)
-        self.solution = solution
+
+        self.solution_with_votes = solution_with_votes
+        self.solution = solution_with_votes.solution
 
         self.setProperty("variant", "solution-card")
-        self.setProperty("highlighted", solution.highlighted)
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -79,11 +80,11 @@ class SolutionCard(QFrame):
         left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(10)
 
-        title_lbl = QLabel(solution.title)
+        title_lbl = QLabel(self.solution.title)
         title_lbl.setProperty("role", "solution-title")
         title_lbl.setWordWrap(True)
 
-        desc_lbl = QLabel(solution.description)
+        desc_lbl = QLabel(self.solution.description)
         desc_lbl.setProperty("role", "solution-description")
         desc_lbl.setWordWrap(True)
 
@@ -93,9 +94,11 @@ class SolutionCard(QFrame):
 
         details_btn = QPushButton("View Details")
         details_btn.setProperty("variant", "link")
-        details_btn.clicked.connect(lambda: self.details_requested.emit(self.solution.id))
+        details_btn.clicked.connect(
+            lambda: self.details_requested.emit(self.solution.id)
+        )
 
-        status_lbl = QLabel(solution.status_text)
+        status_lbl = QLabel(self._build_status_text())
         status_lbl.setProperty("role", "solution-status")
 
         meta_row.addWidget(details_btn)
@@ -111,7 +114,7 @@ class SolutionCard(QFrame):
         right_col.setSpacing(10)
         right_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        votes_lbl = QLabel(str(solution.votes))
+        votes_lbl = QLabel(str(self.solution_with_votes.votes))
         votes_lbl.setProperty("role", "solution-votes")
         votes_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -133,12 +136,18 @@ class SolutionCard(QFrame):
 
         outer.addWidget(body, 1)
 
+    def _build_status_text(self) -> str:
+        if self.solution_with_votes.votes > 0:
+            return "Receiving support"
+        return "New proposal"
+
 
 class IssueDetailWidget(QWidget):
     back_clicked = pyqtSignal()
     approved = pyqtSignal(UUID)
-    solution_voted = pyqtSignal(UUID, str)
-    solution_details_requested = pyqtSignal(UUID, str)
+    open_create_solution = pyqtSignal(UUID)
+    solution_voted = pyqtSignal(UUID, UUID)
+    solution_details_requested = pyqtSignal(UUID, UUID)
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -272,9 +281,16 @@ class IssueDetailWidget(QWidget):
         self.solutions_count_lbl = QLabel("0 Solutions Active")
         self.solutions_count_lbl.setProperty("role", "section-meta")
 
-        solutions_header.addWidget(solutions_title)
+        self.add_solution_btn = QPushButton("Add Solution")
+        self.add_solution_btn.setProperty("variant", "outline-accent")
+        self.add_solution_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.add_solution_btn.clicked.connect(self._open_create_solution)
+
+        solutions_header.addWidget(solutions_title, 0, Qt.AlignmentFlag.AlignVCenter)
+        solutions_header.addSpacing(8)
+        solutions_header.addWidget(self.solutions_count_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         solutions_header.addStretch()
-        solutions_header.addWidget(self.solutions_count_lbl)
+        solutions_header.addWidget(self.add_solution_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.solutions_layout = QVBoxLayout()
         self.solutions_layout.setContentsMargins(0, 0, 0, 0)
@@ -310,11 +326,12 @@ class IssueDetailWidget(QWidget):
 
     def _set_enabled(self, enabled: bool) -> None:
         self.approve_btn.setEnabled(enabled)
+        self.add_solution_btn.setEnabled(enabled)
 
     def show_issue(
         self,
         issue_with_votes: IssueWithVotes,
-        solutions: Optional[list[Solution]] = None,
+        solutions: Optional[list[SolutionWithVotes]] = None,
     ) -> None:
         self._current_issue = issue_with_votes
         self.current_issue_id = issue_with_votes.issue.id
@@ -351,11 +368,11 @@ class IssueDetailWidget(QWidget):
         if self.current_issue_id is not None:
             self.approved.emit(self.current_issue_id)
 
-    def _on_solution_voted(self, solution_id: str) -> None:
+    def _on_solution_voted(self, solution_id: UUID) -> None:
         if self.current_issue_id is not None:
             self.solution_voted.emit(self.current_issue_id, solution_id)
 
-    def _on_solution_details_requested(self, solution_id: str) -> None:
+    def _on_solution_details_requested(self, solution_id: UUID) -> None:
         if self.current_issue_id is not None:
             self.solution_details_requested.emit(self.current_issue_id, solution_id)
 
@@ -391,3 +408,7 @@ class IssueDetailWidget(QWidget):
             return
 
         print(f"Creator clicked: {self._current_issue.issue.creator_id}")
+
+    def _open_create_solution(self) -> None:
+        if self.current_issue_id is not None:
+            self.open_create_solution.emit(self.current_issue_id)
