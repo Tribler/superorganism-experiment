@@ -31,10 +31,10 @@ class FieldBlock(QWidget):
     ):
         super().__init__(parent)
 
-        self.setObjectName("fieldBlock")
+        self.setProperty("role", "field-block")
 
         self.label = QLabel(title)
-        self.label.setObjectName("fieldLabel")
+        self.label.setProperty("role", "field-label")
 
         meta_row = QHBoxLayout()
         meta_row.setContentsMargins(0, 0, 0, 0)
@@ -58,7 +58,7 @@ class ButtonBlock(QWidget):
     ):
         super().__init__(parent)
 
-        self.setObjectName("buttonBlock")
+        self.setProperty("role", "button-block")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -81,7 +81,6 @@ class CreateIssueOverlay(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._build_ui()
-        self._apply_styles()
 
         if parent is not None:
             parent.installEventFilter(self)
@@ -124,22 +123,26 @@ class CreateIssueOverlay(QWidget):
         card_layout.setSpacing(16)
 
         self.title_label = QLabel("Create New Issue Proposal")
-        self.title_label.setObjectName("dialogTitle")
+        self.title_label.setProperty("role", "dialog-title")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.title_edit = QLineEdit()
+        self.title_edit.setProperty("variant", "default")
+        self.title_edit.setProperty("field-type", "single-line")
         self.title_edit.setPlaceholderText("e.g., Improve vote review flow")
         self.title_edit.textChanged.connect(self._on_title_changed)
 
         self.title_error_label = QLabel("")
-        self.title_error_label.setObjectName("errorLabel")
+        self.title_error_label.setProperty("role", "error-label")
         self.title_error_label.hide()
 
         self.title_counter_label = QLabel("")
-        self.title_counter_label.setObjectName("counterLabel")
+        self.title_counter_label.setProperty("role", "counter-label")
         self.title_counter_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.description_edit = QTextEdit()
+        self.description_edit.setProperty("variant", "default")
+        self.description_edit.setProperty("field-type", "multi-line")
         self.description_edit.setPlaceholderText(
             "Provide details about the issue, goals, and expected community impact..."
         )
@@ -147,11 +150,11 @@ class CreateIssueOverlay(QWidget):
         self.description_edit.textChanged.connect(self._on_description_changed)
 
         self.description_error_label = QLabel("")
-        self.description_error_label.setObjectName("errorLabel")
+        self.description_error_label.setProperty("role", "error-label")
         self.description_error_label.hide()
 
         self.description_counter_label = QLabel("")
-        self.description_counter_label.setObjectName("counterLabel")
+        self.description_counter_label.setProperty("role", "counter-label")
         self.description_counter_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.title_block = FieldBlock(
@@ -171,11 +174,11 @@ class CreateIssueOverlay(QWidget):
         )
 
         self.create_btn = QPushButton("Create Issue")
-        self.create_btn.setObjectName("primaryButton")
+        self.create_btn.setProperty("variant", "primary")
         self.create_btn.clicked.connect(self._create)
 
         self.cancel_btn = QPushButton("Cancel")
-        self.cancel_btn.setObjectName("secondaryButton")
+        self.cancel_btn.setProperty("variant", "secondary")
         self.cancel_btn.clicked.connect(self.close_overlay)
 
         self.button_block = ButtonBlock(
@@ -202,118 +205,6 @@ class CreateIssueOverlay(QWidget):
         )
 
         root.addWidget(self.overlay)
-
-    def _apply_styles(self) -> None:
-        self.setStyleSheet("""
-            QWidget#createIssueOverlay {
-                background: transparent;
-            }
-
-            QWidget#overlay {
-                background: rgba(0, 0, 0, 150);
-            }
-
-            QWidget#dialogCard {
-                background: #1e2332;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 22px;
-            }
-
-            QLabel {
-                color: #e5e7eb;
-            }
-
-            QLabel#dialogTitle {
-                font-size: 24px;
-                font-weight: 700;
-                color: #f8fafc;
-            }
-
-            QLabel#fieldLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #f3f4f6;
-            }
-
-            QLabel#errorLabel {
-                color: #fca5a5;
-                font-size: 12px;
-            }
-
-            QLineEdit, QTextEdit {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 12px;
-                color: #f8fafc;
-                font-size: 14px;
-                padding: 12px 14px;
-            }
-
-            QLineEdit:focus, QTextEdit:focus {
-                border: 1px solid #8b5cf6;
-            }
-
-            QLineEdit[invalid="true"], QTextEdit[invalid="true"] {
-                border: 1px solid #ef4444;
-            }
-
-            QTextEdit {
-                padding-top: 12px;
-            }
-
-            QPushButton {
-                border: none;
-                border-radius: 12px;
-                font-size: 15px;
-                padding: 14px 18px;
-                text-align: center;
-            }
-
-            QPushButton#primaryButton {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #7c3aed,
-                    stop:1 #6366f1
-                );
-                color: white;
-                font-weight: 700;
-            }
-
-            QPushButton#primaryButton:hover:!disabled {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8b5cf6,
-                    stop:1 #7c3aed
-                );
-            }
-
-            QPushButton#primaryButton:disabled {
-                background: rgba(255, 255, 255, 0.10);
-                color: rgba(255, 255, 255, 0.45);
-            }
-
-            QPushButton#secondaryButton {
-                background: transparent;
-                color: #a1a1aa;
-                font-weight: 500;
-            }
-
-            QPushButton#secondaryButton:hover {
-                background: rgba(255, 255, 255, 0.04);
-                color: #e5e7eb;
-            }
-
-            QLabel#counterLabel {
-                color: #9ca3af;
-                font-size: 12px;
-                min-width: 70px;
-            }
-
-            QLabel#counterLabel[overLimit="true"] {
-                color: #fca5a5;
-                font-weight: 600;
-            }
-        """)
 
     def open_overlay(self) -> None:
         self._clear_fields()

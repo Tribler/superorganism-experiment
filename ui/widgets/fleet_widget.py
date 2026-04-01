@@ -6,9 +6,17 @@ from typing import Any
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QTableView, QFrame, QHeaderView,
+    QApplication,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTableView,
+    QFrame,
+    QHeaderView,
 )
+
+from ui.widgets.table_utils import apply_shared_table_config
 
 COLUMNS = ["Name", "IP", "Commit", "Uptime", "Disk", "BTC", "BTC Address", "Runway", "Region", "Last Seen"]
 
@@ -20,7 +28,7 @@ def _fmt_uptime(seconds: int) -> str:
 
 
 def _fmt_disk(used_bytes: int, total_bytes: int) -> str:
-    used_gb  = used_bytes  / (1024 ** 3)
+    used_gb = used_bytes / (1024 ** 3)
     total_gb = total_bytes / (1024 ** 3)
     return f"{used_gb:.1f}/{total_gb:.1f} GB"
 
@@ -53,6 +61,7 @@ class FleetTableModel(QAbstractTableModel):
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
+
         row = self._rows[index.row()]
         col = index.column()
 
@@ -85,14 +94,14 @@ class FleetTableModel(QAbstractTableModel):
             return int(Qt.AlignmentFlag.AlignCenter)
 
         if role == Qt.ItemDataRole.ForegroundRole:
-            if col == 7:  # Runway
+            if col == 7:
                 days = row.get("vps_days_remaining", 0)
                 if days > 30:
-                    return QColor("#34d399")   # green
+                    return QColor("#34d399")
                 elif days >= 7:
-                    return QColor("#fbbf24")   # amber
+                    return QColor("#fbbf24")
                 else:
-                    return QColor("#ef4444")   # red
+                    return QColor("#ef4444")
 
         return None
 
@@ -100,6 +109,7 @@ class FleetTableModel(QAbstractTableModel):
 class FleetWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setProperty("role", "fleet-page")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(34, 28, 34, 28)
@@ -107,15 +117,18 @@ class FleetWidget(QWidget):
 
         header = QHBoxLayout()
         title = QLabel("Fleet")
-        title.setObjectName("pageTitle")
+        title.setProperty("role", "page-title")
+
         self._node_count_lbl = QLabel("Nodes: 0")
-        self._node_count_lbl.setObjectName("nodeCountBadge")
+        self._node_count_lbl.setProperty("variant", "badge")
+        self._node_count_lbl.setProperty("tone", "info")
+
         header.addWidget(title)
         header.addStretch()
         header.addWidget(self._node_count_lbl)
 
         table_card = QFrame()
-        table_card.setObjectName("tableCard")
+        table_card.setProperty("variant", "card")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -124,20 +137,16 @@ class FleetWidget(QWidget):
         self._proxy.setSourceModel(self._model)
 
         self._table = QTableView()
+        self._table.setProperty("variant", "data-table")
         self._table.setModel(self._proxy)
-        self._table.setSortingEnabled(True)
-        self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self._table.setShowGrid(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setMouseTracking(True)
-        self._table.verticalHeader().hide()
-        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        apply_shared_table_config(self._table)
 
         hdr = self._table.horizontalHeader()
         hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)      # cols 1-8 divide remaining space equally
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)     # Name — fixed, same as Infohash
-        hdr.setSectionResizeMode(9, QHeaderView.ResizeMode.Fixed)     # Last Seen — fixed, same as Last Check
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(9, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 115)
         self._table.setColumnWidth(9, 162)
 
@@ -147,71 +156,38 @@ class FleetWidget(QWidget):
 
         stats_bar = QHBoxLayout()
         stats_bar.setSpacing(24)
-        self._total_lbl    = QLabel("Total: 0")
-        self._safe_lbl     = QLabel("Safe: 0")
-        self._safeish_lbl  = QLabel("Safe-ish: 0")
-        self._dying_lbl    = QLabel("Dying: 0")
-        self._total_lbl.setObjectName("statTotal")
-        self._safe_lbl.setObjectName("statSafe")
-        self._safeish_lbl.setObjectName("statSafeish")
-        self._dying_lbl.setObjectName("statDying")
+
+        self._total_lbl = QLabel("Total: 0")
+        self._safe_lbl = QLabel("Safe: 0")
+        self._safeish_lbl = QLabel("Safe-ish: 0")
+        self._dying_lbl = QLabel("Dying: 0")
+
+        self._total_lbl.setProperty("variant", "badge")
+        self._total_lbl.setProperty("tone", "neutral")
+
+        self._safe_lbl.setProperty("variant", "badge")
+        self._safe_lbl.setProperty("tone", "success")
+
+        self._safeish_lbl.setProperty("variant", "badge")
+        self._safeish_lbl.setProperty("tone", "warning")
+
+        self._dying_lbl.setProperty("variant", "badge")
+        self._dying_lbl.setProperty("tone", "danger")
+
         for lbl in (self._total_lbl, self._safe_lbl, self._safeish_lbl, self._dying_lbl):
             stats_bar.addWidget(lbl)
+
         stats_bar.addStretch()
 
         layout.addLayout(header)
         layout.addLayout(stats_bar)
         layout.addWidget(table_card, 1)
 
-        self._table.setStyleSheet("""
-QTableView {
-    background: transparent;
-    color: #e5e7eb;
-    border: none;
-    gridline-color: transparent;
-    alternate-background-color: rgba(59,130,246,0.04);
-    selection-background-color: rgba(59,130,246,0.20);
-    selection-color: white;
-}
-QTableView::item:hover {
-    background: rgba(59,130,246,0.08);
-}
-QHeaderView::section {
-    background: rgba(148,163,184,0.35);
-    color: white;
-    border: none;
-    padding: 16px 14px;
-    font-weight: 600;
-}
-QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }
-QScrollBar::handle:vertical { background: rgba(148,163,184,0.25); border-radius: 3px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background: rgba(148,163,184,0.45); }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal { background: transparent; height: 6px; margin: 0; }
-QScrollBar::handle:horizontal { background: rgba(148,163,184,0.25); border-radius: 3px; min-width: 24px; }
-QScrollBar::handle:horizontal:hover { background: rgba(148,163,184,0.45); }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-""")
-        self.setStyleSheet("""
-#nodeCountBadge {
-    background: rgba(59,130,246,0.12);
-    color: #93c5fd;
-    border-radius: 10px;
-    padding: 4px 12px;
-    font-size: 13px;
-    font-weight: 600;
-}
-#statTotal    { background: rgba(255,255,255,0.06); color: #cbd5e1; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statSafe     { background: rgba(52,211,153,0.12);  color: #34d399; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statSafeish  { background: rgba(251,146,60,0.12);  color: #fb923c; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statDying    { background: rgba(239,68,68,0.12);   color: #ef4444; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-""")
-
     def _on_cell_clicked(self, index) -> None:
         source = self._proxy.mapToSource(index)
         row = self._model._rows[source.row()]
         col = source.column()
-        if col == 6:  # BTC Address
+        if col == 6:
             QApplication.clipboard().setText(row.get("btc_address", ""))
 
     def load(self, fleet: dict) -> None:
@@ -219,10 +195,10 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
         self._model.load(rows)
         self._node_count_lbl.setText(f"Nodes: {len(rows)}")
 
-        total   = len(rows)
-        safe    = sum(1 for r in rows if r.get("vps_days_remaining", 0) > 60)
+        total = len(rows)
+        safe = sum(1 for r in rows if r.get("vps_days_remaining", 0) > 60)
         safeish = sum(1 for r in rows if 30 <= r.get("vps_days_remaining", 0) <= 60)
-        dying   = sum(1 for r in rows if r.get("vps_days_remaining", 0) < 30)
+        dying = sum(1 for r in rows if r.get("vps_days_remaining", 0) < 30)
 
         self._total_lbl.setText(f"Total: {total}")
         self._safe_lbl.setText(f"Safe: {safe}")

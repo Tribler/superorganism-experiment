@@ -6,20 +6,28 @@ from typing import Any
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QTableView, QFrame, QHeaderView,
+    QApplication,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTableView,
+    QFrame,
+    QHeaderView,
 )
+
+from ui.widgets.table_utils import apply_shared_table_config
 
 COLUMNS = ["Infohash", "Seeders", "Leechers", "Total Peers", "Growth %", "Shrink %", "Exploding", "Status", "Last Check"]
 
-COL_INFOHASH   = 0
-COL_SEEDERS    = 1
-COL_LEECHERS   = 2
-COL_TOTAL      = 3
-COL_GROWTH     = 4
-COL_SHRINK     = 5
-COL_EXPLODING  = 6
-COL_STATUS     = 7
+COL_INFOHASH = 0
+COL_SEEDERS = 1
+COL_LEECHERS = 2
+COL_TOTAL = 3
+COL_GROWTH = 4
+COL_SHRINK = 5
+COL_EXPLODING = 6
+COL_STATUS = 7
 COL_LAST_CHECK = 8
 
 
@@ -47,6 +55,7 @@ class TorrentTableModel(QAbstractTableModel):
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
+
         row = self._rows[index.row()]
         col = index.column()
 
@@ -90,30 +99,42 @@ class TorrentTableModel(QAbstractTableModel):
 class TorrentsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setProperty("role", "torrents-page")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(34, 28, 34, 28)
         layout.setSpacing(22)
 
         title = QLabel("Torrents")
-        title.setObjectName("pageTitle")
+        title.setProperty("role", "page-title")
 
         stats_bar = QHBoxLayout()
         stats_bar.setSpacing(24)
-        self._total_lbl    = QLabel("Total: 0")
-        self._healthy_lbl  = QLabel("Healthy: 0")
+
+        self._total_lbl = QLabel("Total: 0")
+        self._healthy_lbl = QLabel("Healthy: 0")
         self._no_peers_lbl = QLabel("No Peers: 0")
         self._exploding_lbl = QLabel("Exploding: 0")
-        self._total_lbl.setObjectName("statTotal")
-        self._healthy_lbl.setObjectName("statHealthy")
-        self._no_peers_lbl.setObjectName("statNoPeers")
-        self._exploding_lbl.setObjectName("statExploding")
+
+        self._total_lbl.setProperty("variant", "badge")
+        self._total_lbl.setProperty("tone", "neutral")
+
+        self._healthy_lbl.setProperty("variant", "badge")
+        self._healthy_lbl.setProperty("tone", "success")
+
+        self._no_peers_lbl.setProperty("variant", "badge")
+        self._no_peers_lbl.setProperty("tone", "muted")
+
+        self._exploding_lbl.setProperty("variant", "badge")
+        self._exploding_lbl.setProperty("tone", "warning")
+
         for lbl in (self._total_lbl, self._healthy_lbl, self._no_peers_lbl, self._exploding_lbl):
             stats_bar.addWidget(lbl)
+
         stats_bar.addStretch()
 
         table_card = QFrame()
-        table_card.setObjectName("tableCard")
+        table_card.setProperty("variant", "card")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -122,20 +143,16 @@ class TorrentsWidget(QWidget):
         self._proxy.setSourceModel(self._model)
 
         self._table = QTableView()
+        self._table.setProperty("variant", "data-table")
         self._table.setModel(self._proxy)
-        self._table.setSortingEnabled(True)
-        self._table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self._table.setShowGrid(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setMouseTracking(True)
-        self._table.verticalHeader().hide()
-        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        apply_shared_table_config(self._table)
 
         hdr = self._table.horizontalHeader()
         hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)      # cols 1-7 divide remaining space equally
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)     # Infohash — fixed, click to copy
-        hdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)     # Last Check — fixed
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 115)
         self._table.setColumnWidth(8, 162)
 
@@ -147,43 +164,6 @@ class TorrentsWidget(QWidget):
         layout.addLayout(stats_bar)
         layout.addWidget(table_card, 1)
 
-
-        self._table.setStyleSheet("""
-QTableView {
-    background: transparent;
-    color: #e5e7eb;
-    border: none;
-    gridline-color: transparent;
-    alternate-background-color: rgba(59,130,246,0.04);
-    selection-background-color: rgba(59,130,246,0.20);
-    selection-color: white;
-}
-QTableView::item:hover {
-    background: rgba(59,130,246,0.08);
-}
-QHeaderView::section {
-    background: rgba(148,163,184,0.35);
-    color: white;
-    border: none;
-    padding: 16px 14px;
-    font-weight: 600;
-}
-QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }
-QScrollBar::handle:vertical { background: rgba(148,163,184,0.25); border-radius: 3px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background: rgba(148,163,184,0.45); }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal { background: transparent; height: 6px; margin: 0; }
-QScrollBar::handle:horizontal { background: rgba(148,163,184,0.25); border-radius: 3px; min-width: 24px; }
-QScrollBar::handle:horizontal:hover { background: rgba(148,163,184,0.45); }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-""")
-        self.setStyleSheet("""
-#statTotal    { background: rgba(255,255,255,0.06); color: #cbd5e1; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statHealthy  { background: rgba(52,211,153,0.12);  color: #34d399; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statNoPeers  { background: rgba(148,163,184,0.10); color: #94a3b8; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-#statExploding { background: rgba(251,146,60,0.12); color: #fb923c; border-radius: 10px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
-""")
-
     def _on_cell_clicked(self, index) -> None:
         source = self._proxy.mapToSource(index)
         row = self._model._rows[source.row()]
@@ -194,9 +174,9 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
     def load(self, rows: list[dict]) -> None:
         self._model.load(rows)
 
-        total     = len(rows)
-        healthy   = sum(1 for r in rows if r.get("total_peers", 0) > 0)
-        no_peers  = total - healthy
+        total = len(rows)
+        healthy = sum(1 for r in rows if r.get("total_peers", 0) > 0)
+        no_peers = total - healthy
         exploding = sum(1 for r in rows if r.get("exploding_estimator", 0.0) > 0.5)
 
         self._total_lbl.setText(f"Total: {total}")
