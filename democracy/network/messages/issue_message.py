@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -14,16 +16,16 @@ class IssueMessage(DataClassPayload[1], BaseMessage[Issue]):
     Message to propagate issue data in JSON format.
 
     Attributes:
-        id (str): Unique identifier for the issue.
         title (str): Title of the issue.
-        description (str): Description of the issue.
         creator_id (str): Identifier of the creator of the issue.
+        description (str): Description of the issue.
+        id (str): Unique identifier for the issue.
         created_at (str): Timestamp when the issue was created (in ISO format).
     """
     title: str
+    creator_id: str
     description: str
     id: str
-    creator_id: str
     created_at: str
 
     @property
@@ -36,21 +38,21 @@ class IssueMessage(DataClassPayload[1], BaseMessage[Issue]):
     def to_model(self) -> Issue:
         return Issue(
             title=self.title,
+            creator_id=UUID(self.creator_id),
             description=self.description,
             id=UUID(self.id),
-            creator_id=UUID(self.creator_id),
             created_at=parse_datetime(self.created_at),
         )
 
     @classmethod
-    def from_model(cls, issue: Issue) -> "IssueMessage":
+    def from_model(cls, issue: Issue) -> IssueMessage:
         return cls(
             title=issue.title,
+            creator_id=str(issue.creator_id),
             description=issue.description,
             id=str(issue.id),
-            creator_id=str(issue.creator_id),
             created_at=issue.created_at.isoformat(),
         )
 
 # Force schema generation once on import
-_ = IssueMessage(title="", description="", id="", creator_id="", created_at="")
+_ = IssueMessage(title="", creator_id="", description="", id="", created_at="")

@@ -6,11 +6,15 @@ from ipv8.peer import Peer
 
 from config import COMMUNICATION_INTERVAL
 from democracy.constants import COMMUNITY_ID
+from democracy.models.solution import Solution
+from democracy.models.solution_vote import SolutionVote
 from democracy.network.messages.base_message import BaseMessage
 from democracy.network.messages.issue_message import IssueMessage
-from democracy.network.messages.vote_message import VoteMessage
+from democracy.network.messages.issue_vote_message import IssueVoteMessage
 from democracy.models.issue import Issue
-from democracy.models.vote import Vote
+from democracy.models.issue_vote import IssueVote
+from democracy.network.messages.solution_message import SolutionMessage
+from democracy.network.messages.solution_vote_message import SolutionVoteMessage
 from democracy.storage.json_store import JSONStore
 
 TModel = TypeVar("TModel")
@@ -32,12 +36,16 @@ class DemocracyCommunity(Community):
         super().__init__(settings)
 
         self.issue_store: JSONStore[Issue] = settings.issue_store
-        self.vote_store: JSONStore[Vote] = settings.vote_store
+        self.issue_vote_store: JSONStore[IssueVote] = settings.issue_vote_store
+        self.solution_store: JSONStore[Solution] = settings.solution_store
+        self.solution_vote_store: JSONStore[SolutionVote] = settings.solution_vote_store
         self.data_changed = settings.data_changed
 
         # Register the message handlers for messages.
         self.add_message_handler(IssueMessage, self.on_issue_message)
-        self.add_message_handler(VoteMessage, self.on_vote_message)
+        self.add_message_handler(IssueVoteMessage, self.on_issue_vote_message)
+        self.add_message_handler(SolutionMessage, self.on_solution_message)
+        self.add_message_handler(SolutionVoteMessage, self.on_solution_vote_message)
 
     def _multicast(self, payload: BaseMessage, skip_peers: Optional[Set[Peer]] = None) -> None:
         """
@@ -86,9 +94,21 @@ class DemocracyCommunity(Community):
             )
 
             self._broadcast_store(
-                self.vote_store,
-                VoteMessage.from_model,
-                label="votes",
+                self.issue_vote_store,
+                IssueVoteMessage.from_model,
+                label="issue votes"
+            )
+            
+            self._broadcast_store(
+                self.solution_store,
+                SolutionMessage.from_model,
+                label="solutions"
+            )
+
+            self._broadcast_store(
+                self.solution_vote_store,
+                SolutionVoteMessage.from_model,
+                label="solution votes"
             )
 
         # We register an asyncio task with this overlay.
@@ -129,22 +149,62 @@ class DemocracyCommunity(Community):
         """
         self._multicast(IssueMessage.from_model(issue))
 
-    @lazy_wrapper(VoteMessage)
-    def on_vote_message(self, peer: Peer, payload: VoteMessage) -> None:
+    @lazy_wrapper(IssueVoteMessage)
+    def on_issue_vote_message(self, peer: Peer, payload: IssueVoteMessage) -> None:
         """
-        Handles incoming vote messages from peers. Adds unknown votes to the store and propagates them.
+        Handles incoming issue vote messages from peers. Adds unknown issue votes to the store and propagates them.
 
         :param peer: Peer that sent the message.
-        :param payload: Received vote message.
+        :param payload: Received issue vote message.
         :return: None
         """
-        self._handle_incoming_message(peer, payload, store=self.vote_store, on_added=self.data_changed)
+        self._handle_incoming_message(peer, payload, store=self.issue_vote_store, on_added=self.data_changed)
 
-    def on_vote(self, vote: Vote) -> None:
+    def on_issue_vote(self, vote: IssueVote) -> None:
         """
-        Broadcasts a newly created vote to all connected peers.
+        Broadcasts a newly created issue vote to all connected peers.
 
-        :param vote: Vote to broadcast.
+        :param vote: Issue vote to broadcast.
         :return: None
         """
-        self._multicast(VoteMessage.from_model(vote))
+        self._multicast(IssueVoteMessage.from_model(vote))
+
+    @lazy_wrapper(SolutionMessage)
+    def on_solution_message(self, peer: Peer, payload: SolutionMessage) -> None:
+        """
+        Handles incoming solution messages from peers. Adds unknown solution to the store and propagates them.
+
+        :param peer: Peer that sent the message.
+        :param payload: Received solution message.
+        :return: None
+        """
+        self._handle_incoming_message(peer, payload, store=self.solution_store, on_added=self.data_changed)
+
+    def on_create_solution(self, solution: Solution) -> None:
+        """
+        Broadcasts a newly created solution to all connected peers.
+
+        :param solution: Solution to broadcast.
+        :return: None
+        """
+        self._multicast(SolutionMessage.from_model(solution))
+
+    @lazy_wrapper(SolutionVoteMessage)
+    def on_solution_vote_message(self, peer: Peer, payload: SolutionVoteMessage) -> None:
+        """
+        Handles incoming solution vote messages from peers. Adds unknown solution votes to the store and propagates them.
+
+        :param peer: Peer that sent the message.
+        :param payload: Received solution vote message.
+        :return: None
+        """
+        self._handle_incoming_message(peer, payload, store=self.solution_vote_store, on_added=self.data_changed)
+
+    def on_solution_vote(self, vote: SolutionVote) -> None:
+        """
+        Broadcasts a newly created solution vote to all connected peers.
+
+        :param vote: Solution vote to broadcast.
+        :return: None
+        """
+        self._multicast(SolutionVoteMessage.from_model(vote))

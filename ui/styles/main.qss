@@ -683,3 +683,113 @@ QTableView[variant="data-table"] QScrollBar::sub-line:horizontal {
     width: 0;
     height: 0;
 }
+
+/* =========================================================
+   SOLUTION DETAIL PAGE
+========================================================= */
+
+QWidget[role="solution-detail-page"] {
+    background-color: #0e0e0e;
+}
+
+QLabel[role="solution-meta-kicker"],
+QLabel[role="solution-section-kicker"],
+QLabel[role="solution-side-kicker"] {
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+QLabel[role="solution-section-kicker"] {
+    padding-top: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 10px;
+}
+
+QFrame[variant="solution-vote-panel"] {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 22px;
+    min-width: 280px;
+    max-width: 280px;
+}
+
+QLabel[role="solution-side-votes"] {
+    color: #ffffff;
+    font-size: 42px;
+    font-weight: 800;
+}
+
+QLabel[role="solution-side-status"] {
+    color: #b6a0ff;
+    font-size: 15px;
+    font-weight: 700;
+    padding-bottom: 6px;
+}
+
+QLabel[role="solution-side-meta"] {
+    color: #a1a1aa;
+    font-size: 12px;
+}
+
+QLabel[role="solution-side-helper"] {
+    color: #a1a1aa;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+QFrame[role="solution-progress-track"] {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    min-height: 8px;
+    max-height: 8px;
+}
+
+QFrame[role="solution-progress-fill"] {
+    background-color: #8b5cf6;
+    border-radius: 4px;
+    min-height: 8px;
+    max-height: 8px;
+}
+
+QFrame[variant="verification-card"] {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+}
+
+QFrame[variant="verification-card"]:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+QFrame[role="verification-icon-wrap"] {
+    background-color: #050505;
+    border-radius: 12px;
+}
+
+QLabel[role="verification-icon"] {
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QLabel[role="verification-title"] {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QPushButton[variant="icon-link"] {
+    background-color: transparent;
+    border: none;
+    color: #a78bfa;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 0;
+}
+
+QPushButton[variant="icon-link"]:hover {
+    color: #c4b5fd;
+}

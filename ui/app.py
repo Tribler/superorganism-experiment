@@ -14,17 +14,21 @@ from PyQt6.QtWidgets import (
 
 from config import UI_REFRESH_DELAY
 from democracy.models.issue import Issue
+from democracy.models.issue_vote import IssueVote
 from democracy.models.person import Person
 from democracy.models.solution import Solution
-from democracy.models.vote import Vote
-from democracy.storage.issue_reposiory import IssueRepository
+from democracy.models.solution_vote import SolutionVote
+from democracy.storage.democracy_reposiory import DemocracyRepository
 from democracy.storage.json_store import JSONStore
 from ui.models.issue_draft import IssueDraft
+from ui.models.solution_draft import SolutionDraft
 from ui.widgets.create_issue_overlay import CreateIssueOverlay
+from ui.widgets.create_solution_overlay import CreateSolutionOverlay
 from ui.widgets.fleet_widget import FleetWidget
 from ui.widgets.issue_details import IssueDetailWidget
 from ui.widgets.issue_overview import IssuesOverviewWidget
 from ui.widgets.sidebar import SidebarWidget
+from ui.widgets.solution_details import SolutionDetailWidget
 from ui.widgets.torrents_widget import TorrentsWidget
 
 if TYPE_CHECKING:
@@ -44,28 +48,38 @@ class Application(QMainWindow):
 
     Args:
         issue_store (JSONStore[Issue]): Store for issues.
-        vote_store (JSONStore[Vote]): Store for votes.
+        issue_vote_store (JSONStore[Vote]): Store for votes.
     """
     def __init__(
         self,
         user: Person,
         issue_store: JSONStore[Issue],
-        vote_store: JSONStore[Vote],
+        issue_vote_store: JSONStore[IssueVote],
+        solution_store: JSONStore[Solution],
+        solution_vote_store: JSONStore[SolutionVote],
         broadcast_new_issue: Callable[[Issue], None],
-        broadcast_new_vote: Callable[[Vote], None],
+        broadcast_new_issue_vote: Callable[[IssueVote], None],
+        broadcast_new_solution: Callable[[Solution], None],
+        broadcast_new_solution_vote: Callable[[SolutionVote], None],
         health_thread: TorrentHealthThread,
-        parent: Optional[QWidget] = None
+        parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
 
         self.user = user
 
         self.issue_store = issue_store
-        self.vote_store = vote_store
-        self.repo = IssueRepository(issue_store, vote_store)
+        self.issue_vote_store = issue_vote_store
+        self.solution_store = solution_store
+        self.solution_vote_store = solution_vote_store
+
+        self.repo = DemocracyRepository(issue_store, issue_vote_store, solution_store, solution_vote_store)
 
         self.broadcast_new_issue = broadcast_new_issue
-        self.broadcast_new_vote = broadcast_new_vote
+        self.broadcast_new_issue_vote = broadcast_new_issue_vote
+        self.broadcast_new_solution = broadcast_new_solution
+        self.broadcast_new_solution_vote = broadcast_new_solution_vote
+
         self._health_thread = health_thread
 
         self.setWindowTitle("Democracy")
@@ -104,6 +118,14 @@ class Application(QMainWindow):
         self.issue_detail_page.approved.connect(self._on_vote)
         self.issue_detail_page.solution_voted.connect(self._on_solution_vote)
         self.issue_detail_page.solution_details_requested.connect(self._on_solution_details)
+        self.issue_detail_page.open_create_solution.connect(self._open_create_solution_overlay)
+
+        self._solution_target_issue_id: Optional[UUID] = None
+
+        self.solution_detail_page = SolutionDetailWidget()
+        self.solution_detail_page.back_clicked.connect(self._show_issue_detail_page_for_current_issue)
+        self.solution_detail_page.voted.connect(self._on_vote_solution_directly)
+        self.solution_detail_page.code_verification_clicked.connect(self._on_code_verification_clicked)
 
         self.torrents_page = TorrentsWidget()
         self.fleet_page = FleetWidget()
@@ -112,6 +134,7 @@ class Application(QMainWindow):
         self.content_stack.addWidget(self.fleet_page)
         self.content_stack.addWidget(self.issues_page)
         self.content_stack.addWidget(self.issue_detail_page)
+        self.content_stack.addWidget(self.solution_detail_page)
 
         root_layout.addWidget(self.sidebar)
         root_layout.addWidget(self.content_stack, 1)
@@ -131,33 +154,17 @@ class Application(QMainWindow):
         )
 
         self.create_issue_overlay = CreateIssueOverlay(root)
-        self.create_issue_overlay.created.connect(self._on_create)
+        self.create_issue_overlay.created.connect(self._on_create_issue)
         self.create_issue_overlay.hide()
+
+        self.create_solution_overlay = CreateSolutionOverlay(root)
+        self.create_solution_overlay.created.connect(self._on_create_solution)
+        self.create_solution_overlay.hide()
 
         # Initial load
         self.refresh()
 
         self._apply_styles()
-
-    def _mock_solutions_for_issue(self, issue: Issue) -> list:
-        return [
-            Solution(
-                id="sol-1",
-                title="Improve validation and review flow",
-                description="Introduce a clearer validation pipeline and a better review UI so voters can understand the issue and decide faster.",
-                votes=42,
-                status_text="Validated by core team",
-                highlighted=True,
-            ),
-            Solution(
-                id="sol-2",
-                title="Split issue discussion from final voting",
-                description="Allow issue discussion and solution voting to happen separately so users can support the issue without prematurely endorsing one implementation.",
-                votes=17,
-                status_text="Under technical review",
-                highlighted=False,
-            ),
-        ]
 
     def _apply_styles(self) -> None:
         with open("ui/styles/main.qss", "r") as f:
@@ -170,16 +177,14 @@ class Application(QMainWindow):
         """
         Immediate refresh (useful for local UI actions).
         """
-        self.issues_page.load(self.repo.get_all())
+        self.issues_page.load(self.repo.get_all_issues_with_votes())
 
         current_id = self.issue_detail_page.current_issue_id
         if current_id:
-            e = self.repo.get(current_id)
-            if e:
-                self.issue_detail_page.show_issue(
-                    e,
-                    self._mock_solutions_for_issue(e.issue)
-                )
+            issue = self.repo.get_issue_with_votes(current_id)
+            if issue:
+                solutions = self.repo.get_solutions_for_issue_with_votes(current_id)
+                self.issue_detail_page.show_issue(issue, solutions)
 
     def schedule_refresh(self) -> None:
         """
@@ -209,7 +214,7 @@ class Application(QMainWindow):
     # -----------------------------
     # Handlers
     # -----------------------------
-    def _on_create(self, draft: IssueDraft):
+    def _on_create_issue(self, draft: IssueDraft):
         """
         Handles creation of a new issue. Sets the creator to the current user and adds it to the store.
         Refreshes the issue list afterwards.
@@ -251,25 +256,39 @@ class Application(QMainWindow):
         :param issue_id: ID of the selected issue.
         :return: None
         """
-        for v in self.vote_store.get_all():
-            if v.voter_id == self.user.id and v.issue_id == issue_id:
-                return # already voted
+        if self.repo.has_user_voted_for_issue(self.user.id, issue_id):
+            return # already voted
 
-        vote = Vote(
+        vote = IssueVote(
             voter_id=self.user.id,
             issue_id=issue_id,
         )
-        self.vote_store.add(vote)
+        self.issue_vote_store.add(vote)
 
         self.refresh()
+        self.broadcast_new_issue_vote(vote)
 
-        self.broadcast_new_vote(vote)
+    def _on_solution_vote(self, issue_id: UUID, solution_id: UUID) -> None:
+        if self.repo.has_user_voted_for_solution(self.user.id, solution_id):
+            return
 
-    def _on_solution_vote(self, issue_id: UUID, solution_id: str) -> None:
-        print(f"Vote on solution {solution_id} for issue {issue_id}")
+        vote = SolutionVote(
+            voter_id=self.user.id,
+            solution_id=solution_id,
+        )
+        self.solution_vote_store.add(vote)
 
-    def _on_solution_details(self, issue_id: UUID, solution_id: str) -> None:
-        print(f"Open details for solution {solution_id} of issue {issue_id}")
+        self.refresh()
+        self.broadcast_new_solution_vote(vote)
+
+    def _on_solution_details(self, issue_id: UUID, solution_id: UUID) -> None:
+        solution = self.repo.get_solution_with_votes(solution_id)
+        if not solution:
+            return
+
+        self._current_parent_issue_id = issue_id
+        self.solution_detail_page.show_solution(solution)
+        self.content_stack.setCurrentWidget(self.solution_detail_page)
 
     def _set_active_nav(self, active_name: str) -> None:
         self.sidebar.set_active_by_name(active_name)
@@ -279,16 +298,54 @@ class Application(QMainWindow):
         self.content_stack.setCurrentWidget(self.issues_page)
 
     def _show_issue_detail_page(self, issue_id: UUID) -> None:
-        issue = self.repo.get(issue_id)
+        issue = self.repo.get_issue_with_votes(issue_id)
         if not issue:
             return
 
+        solutions = self.repo.get_solutions_for_issue_with_votes(issue_id)
+
         self.issue_detail_page.show_issue(
             issue,
-            self._mock_solutions_for_issue(issue.issue),
+            solutions,
         )
         self._set_active_nav("issues")
         self.content_stack.setCurrentWidget(self.issue_detail_page)
+
+    def _open_create_solution_overlay(self, issue_id: UUID) -> None:
+        self._solution_target_issue_id = issue_id
+        self.create_solution_overlay.open_overlay()
+
+    def _on_create_solution(self, draft: SolutionDraft) -> None:
+        if self._solution_target_issue_id is None:
+            return
+
+        errors = draft.validate()
+        if errors:
+            return
+
+        solution = Solution(
+            title=draft.title,
+            description=draft.description,
+            creator_id=self.user.id,
+            issue_id=self._solution_target_issue_id,
+        )
+
+        self.solution_store.add(solution)
+        self.refresh()
+        self.broadcast_new_solution(solution)
+
+    def _show_issue_detail_page_for_current_issue(self) -> None:
+        current_id = self.issue_detail_page.current_issue_id
+        if current_id is not None:
+            self._show_issue_detail_page(current_id)
+
+    def _on_vote_solution_directly(self, solution_id: UUID) -> None:
+        current_issue_id = self.issue_detail_page.current_issue_id
+        if current_issue_id is not None:
+            self._on_solution_vote(current_issue_id, solution_id)
+
+    def _on_code_verification_clicked(self, solution_id: UUID) -> None:
+        print(f"Open code verification for solution {solution_id}")
 
     def _show_torrents_page(self) -> None:
         self._set_active_nav("torrents")

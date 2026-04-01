@@ -13,13 +13,15 @@ from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, 
 from ipv8_service import IPv8
 
 from config import KEYS_PATH
-from democracy.network.communities.DemocracyCommunity import DemocracyCommunity
+from democracy.models.solution import Solution
+from democracy.models.solution_vote import SolutionVote
+from democracy.network.communities.democracy_community import DemocracyCommunity
 from democracy.models.issue import Issue
-from democracy.models.vote import Vote
+from democracy.models.issue_vote import IssueVote
 from democracy.storage.json_store import JSONStore
 
 
-QueuedItem = Tuple[str, Union[Issue, Vote]]  # ("issue"|"vote", payload)
+QueuedItem = Tuple[str, Union[Issue, IssueVote, Solution, SolutionVote]]
 
 
 class IPv8Thread(QThread):
@@ -34,20 +36,26 @@ class IPv8Thread(QThread):
     error = pyqtSignal(str)
 
     # GUI -> worker signals
-    broadcastIssue = pyqtSignal(object)     # Issue
-    broadcastVote = pyqtSignal(object)      # Vote
+    broadcastIssue = pyqtSignal(object)         # Issue
+    broadcastIssueVote = pyqtSignal(object)     # Issue vote
+    broadcastSolution = pyqtSignal(object)      # Solution
+    broadcastSolutionVote = pyqtSignal(object)  # Solution vote
 
     def __init__(
         self,
         user_id: UUID,
         issue_store: JSONStore[Issue],
-        vote_store: JSONStore[Vote],
+        issue_vote_store: JSONStore[IssueVote],
+        solution_store: JSONStore[Solution],
+        solution_vote_store: JSONStore[SolutionVote],
         parent=None,
     ):
         super().__init__(parent)
         self._user_id = user_id
         self._issue_store = issue_store
-        self._vote_store = vote_store
+        self._issue_vote_store = issue_vote_store
+        self._solution_store = solution_store
+        self._solution_vote_store = solution_vote_store
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ipv8: Optional[IPv8] = None
@@ -58,7 +66,9 @@ class IPv8Thread(QThread):
 
         # Ensure GUI signals connect to thread slots via queued connection
         self.broadcastIssue.connect(self._on_broadcast_issue)
-        self.broadcastVote.connect(self._on_broadcast_vote)
+        self.broadcastIssueVote.connect(self._on_broadcast_issue_vote)
+        self.broadcastSolution.connect(self._on_broadcast_solution)
+        self.broadcastSolutionVote.connect(self._on_broadcast_solution_vote)
 
     # -----------------------
     # QThread entrypoint
@@ -136,7 +146,9 @@ class IPv8Thread(QThread):
             bootstrappers=default_bootstrap_defs,
             initialize={
                 "issue_store": self._issue_store,
-                "vote_store": self._vote_store,
+                "issue_vote_store": self._issue_vote_store,
+                "solution_store": self._solution_store,
+                "solution_vote_store": self._solution_vote_store,
                 "data_changed": _data_changed_callback,
             },
             on_start=[("on_start",)],
@@ -190,15 +202,43 @@ class IPv8Thread(QThread):
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
 
     @pyqtSlot(object)
-    def _on_broadcast_vote(self, vote: Vote) -> None:
+    def _on_broadcast_issue_vote(self, vote: IssueVote) -> None:
         if self._loop is None:
             return
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("vote", vote))
+                self._pending.append(("issue_vote", vote))
                 return
 
-            self._overlay.on_vote(vote)
+            self._overlay.on_issue_vote(vote)
+
+        asyncio.run_coroutine_threadsafe(_do(), self._loop)
+
+    @pyqtSlot(object)
+    def _on_broadcast_solution(self, solution: Solution) -> None:
+        if self._loop is None:
+            return
+
+        async def _do() -> None:
+            if self._overlay is None:
+                self._pending.append(("solution", solution))
+                return
+
+            self._overlay.on_create_solution(solution)
+
+        asyncio.run_coroutine_threadsafe(_do(), self._loop)
+
+    @pyqtSlot(object)
+    def _on_broadcast_solution_vote(self, vote: SolutionVote) -> None:
+        if self._loop is None:
+            return
+
+        async def _do() -> None:
+            if self._overlay is None:
+                self._pending.append(("solution_vote", vote))
+                return
+
+            self._overlay.on_solution_vote(vote)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
