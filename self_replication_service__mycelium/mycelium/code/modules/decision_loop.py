@@ -62,7 +62,20 @@ async def _handle_recovery() -> None:
         caution_trait = ps.get_caution_trait()
         await deployer.spawn_child(node_state, caution_trait, child_token)
 
-    # failsafe: no recovery needed — _tick() re-triggers naturally if conditions still hold
+    elif ps.is_failsafe_in_progress():
+        logger.warning("%s Recovery: failsafe was interrupted — retrying", _LOG_PREFIX)
+        await _wait_for_node_state()
+        monitor = node_monitor.get_monitor()
+        if monitor is None:
+            logger.warning("%s NodeMonitor not available during failsafe recovery", _LOG_PREFIX)
+            return
+        node_state = monitor.get_state()
+        registry = peer_registry.get_registry()
+        live_peers = registry.get_live_peers() if registry else []
+        try:
+            await failsafe.execute_failsafe(node_state, live_peers)
+        except Exception:
+            logger.exception("%s Failsafe recovery attempt failed — will retry on next restart", _LOG_PREFIX)
 
 
 async def _tick() -> None:
@@ -106,7 +119,10 @@ async def _tick() -> None:
             "%s CRITICAL: runway %d days < failsafe threshold %d days — executing failsafe",
             _LOG_PREFIX, node_state.days_remaining, Config.FAILSAFE_TRIGGER_DAYS,
         )
-        await failsafe.execute_failsafe(node_state, live_peers)
+        try:
+            await failsafe.execute_failsafe(node_state, live_peers)
+        except Exception:
+            logger.exception("%s Failsafe failed — leaving flag set for recovery on restart", _LOG_PREFIX)
         return
 
     # PRIORITY 2 — top up SporeStack balance

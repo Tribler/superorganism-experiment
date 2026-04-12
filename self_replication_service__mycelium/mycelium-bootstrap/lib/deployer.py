@@ -429,6 +429,7 @@ class Deployer:
         log_secret: Optional[str] = None,
         parent_name: str = "genesis",
         sporestack_token: Optional[str] = None,
+        default_btc_address: Optional[str] = None,
     ) -> None:
         logger.info("Starting orchestrator...")
 
@@ -457,6 +458,8 @@ class Deployer:
         env_vars["MYCELIUM_SPAWN_THRESHOLD_DAYS"]   = "60"
         env_vars["MYCELIUM_SPAWN_RESERVE_DAYS"]     = "30"
         env_vars["MYCELIUM_INHERITANCE_RATIO"]      = "0.4"
+        if default_btc_address:
+            env_vars["MYCELIUM_DEFAULT_BTC_ADDRESS"] = default_btc_address
         for name, value in env_vars.items():
             self.set_environment_variable(name, value)
 

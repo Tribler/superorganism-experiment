@@ -21,7 +21,11 @@ async def spawn_child(node_state: NodeState, caution_trait: float, child_token: 
     child_share_sat = compute_child_share(node_state.btc_balance_sat)
 
     try:
-        # TODO 10: provision VPS, deploy code, inject env, transfer BTC
+        # TODO 10: provision VPS, deploy code, inject env, transfer BTC.
+        # When injecting env vars for the child, include:
+        #   MYCELIUM_DEFAULT_BTC_ADDRESS = Config.DEFAULT_BTC_ADDRESS
+        # (same pattern as MYCELIUM_CAUTION_TRAIT) so the cold wallet fallback
+        # propagates to all descendant nodes automatically.
         logger.info(
             "[SPAWNER STUB] would spawn child: token=%s, share=%d sat, caution=%.3f"
             " — not implemented",

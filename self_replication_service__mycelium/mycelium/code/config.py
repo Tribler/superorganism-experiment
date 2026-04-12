@@ -1,6 +1,4 @@
 """
-Configuration management for the autonomous orchestrator.
-
 All configuration values are sourced from environment variables.
 """
 
@@ -63,6 +61,7 @@ class Config:
     BITCOIN_WALLET_NAME: str = os.getenv("MYCELIUM_BITCOIN_WALLET", "mycelium_wallet")
     BTC_MNEMONIC: str = os.getenv("MYCELIUM_BTC_MNEMONIC", "")
     BITCOIN_NETWORK: str = os.getenv("MYCELIUM_BITCOIN_NETWORK", "bitcoin")  # mainnet
+    DEFAULT_BTC_ADDRESS: str = os.getenv("MYCELIUM_DEFAULT_BTC_ADDRESS", "")
 
     # Persistent state
     STATE_DB_FILE: Path = DATA_DIR / "state.db"
@@ -79,7 +78,7 @@ class Config:
     INHERITANCE_RATIO: float   = float(os.getenv("MYCELIUM_INHERITANCE_RATIO", "0.4"))
 
     # Decision loop
-    DECISION_INTERVAL: int     = int(os.getenv("MYCELIUM_DECISION_INTERVAL", "86400"))      # 24h
+    DECISION_INTERVAL: int     = int(os.getenv("MYCELIUM_DECISION_INTERVAL", "43200"))      # 12h
     FAILSAFE_TRIGGER_DAYS: int = int(os.getenv("MYCELIUM_FAILSAFE_TRIGGER_DAYS", "2"))
     TOPUP_TRIGGER_DAYS: int    = int(os.getenv("MYCELIUM_TOPUP_TRIGGER_DAYS", "30"))
     TOPUP_TARGET_DAYS: int     = int(os.getenv("MYCELIUM_TOPUP_TARGET_DAYS", "60"))

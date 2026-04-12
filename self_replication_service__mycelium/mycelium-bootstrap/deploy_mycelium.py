@@ -58,6 +58,17 @@ def load_sporestack_token() -> str | None:
     return SPORESTACK_TOKEN_FILE.read_text().strip() or None
 
 
+def load_default_btc_address() -> str | None:
+    """Load the receiving address from the local 'mycelium' cold wallet."""
+    try:
+        wallet = BitcoinWallet("mycelium")
+        wallet.load()
+        return wallet.get_receiving_address()
+    except Exception as e:
+        logger.error(f"Failed to load default BTC address from 'mycelium' wallet: {e}")
+        return None
+
+
 def generate_vps_wallet() -> tuple[str, str]:
     """
     Generate a fresh btc wallet
@@ -73,6 +84,7 @@ def deploy(
     host: str,
     ssh_port: int = 22,
     ssh_key_path: str = None,
+    default_btc_address: str = None,
 ) -> None:
     """Deploy mycelium to server."""
     key_path = ssh_key_path or str(DEFAULT_SSH_KEY_PATH)
@@ -122,6 +134,7 @@ def deploy(
             log_endpoint=log_endpoint,
             log_secret=log_secret,
             sporestack_token=sporestack_token,
+            default_btc_address=default_btc_address,
         )
 
         logger.info("Verifying health...")
@@ -196,12 +209,19 @@ Examples:
             logger.error("Run 'python acquire_vps.py' first, or specify --host")
             sys.exit(1)
 
+    # Load cold-wallet fallback address — required before deploying
+    default_btc_address = load_default_btc_address()
+    if not default_btc_address:
+        logger.error("No default BTC address — create a local wallet with: python wallet.py create mycelium")
+        sys.exit(1)
+
     # Deploy
     try:
         deploy(
             host=host,
             ssh_port=ssh_port,
             ssh_key_path=ssh_key,
+            default_btc_address=default_btc_address,
         )
     except Exception as e:
         logger.error(f"Deployment failed: {e}")

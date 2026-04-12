@@ -83,13 +83,11 @@ class NodePersistentState:
     def is_failsafe_in_progress(self) -> bool:
         return bool(self.get("failsafe_in_progress", False))
 
-    def mark_failsafe_started(self, target_address: str) -> None:
+    def mark_failsafe_started(self) -> None:
         self.set("failsafe_in_progress", True)
-        self.set("failsafe_target_address", target_address)
 
     def mark_failsafe_completed(self) -> None:
         self.set("failsafe_in_progress", False)
-        self.delete("failsafe_target_address")
 
 
 # ── module-level singleton ──────────────────────────────────────

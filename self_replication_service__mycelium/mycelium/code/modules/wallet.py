@@ -101,6 +101,14 @@ class SpendingWallet:
 
         raise WalletError(f"Broadcast failed: {result}")
 
+    def sweep_all(self, address: str, fee_per_kb: int = None) -> str:
+        """Send entire balance to address, fee auto-calculated by bitcoinlib. Returns txid."""
+        tx = self._wallet.sweep(address, broadcast=True, fee_per_kb=fee_per_kb)
+        if not tx or not tx.txid:
+            raise WalletError(f"Sweep failed: {getattr(tx, 'error', 'unknown error')}")
+        logger.info(f"Sweep complete: {tx.txid}")
+        return tx.txid
+
 
 # Module-level singleton
 _wallet_instance: Optional[SpendingWallet] = None
