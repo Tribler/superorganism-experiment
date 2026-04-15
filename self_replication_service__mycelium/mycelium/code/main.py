@@ -164,7 +164,7 @@ class Orchestrator:
         """Run the IPV8 liberation announcer."""
         try:
             await self.announcer.start()
-            await self.announcer.announce_loop(interval=Config.ANNOUNCE_INTERVAL)
+            await self.announcer.announce_loop(interval=Config.CONTENT_BROADCAST_INTERVAL)
         except Exception as e:
             logger.error(f"Announcer error: {e}", exc_info=True)
         finally:

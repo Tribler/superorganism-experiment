@@ -81,7 +81,7 @@ class TorrentTableModel(QAbstractTableModel):
                 ts = row.get("timestamp", 0)
                 if ts:
                     return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
-                return ""
+                return "-"
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             return int(Qt.AlignmentFlag.AlignCenter)

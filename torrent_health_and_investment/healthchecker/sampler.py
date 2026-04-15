@@ -12,7 +12,7 @@ from healthchecker.db import (
 from healthchecker.client import DHTClient
 from healthchecker.metrics import calculate_all_metrics
 
-SAMPLE_INTERVAL_SECONDS = 300
+SAMPLE_INTERVAL_SECONDS = 30
 RETRY_SLEEP_SECONDS = 60
 MAX_RETRIES = 3
 

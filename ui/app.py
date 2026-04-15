@@ -162,6 +162,9 @@ class Application(QMainWindow):
             self._on_health_data_changed, type=Qt.ConnectionType.QueuedConnection
         )
 
+        # Populate torrent table immediately with all known peers (unchecked show "-")
+        self.torrents_page.load(health_thread.get_torrent_data())
+
         self.create_issue_overlay = CreateIssueOverlay(root)
         self.create_issue_overlay.created.connect(self._on_create_issue)
         self.create_issue_overlay.hide()
