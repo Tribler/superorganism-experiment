@@ -49,7 +49,6 @@ class HealthChecker:
         init_db()
         self.dht_client.bootstrap()
         entries = get_received_content_for_sampling(limit=1000)
-        print(f"IPv8 mode: {len(entries)} entries available from received content")
 
     def get_next_entry(self) -> Optional[TorrentEntry]:
         entries = get_received_content_for_sampling(limit=10)
@@ -66,7 +65,6 @@ class HealthChecker:
         infohash = entry.infohash
 
         if not infohash or not entry.magnet_link:
-            print(f"No magnet link for {entry.url}, skipping...")
             return {
                 "infohash": None,
                 "peers": 0,
@@ -103,11 +101,7 @@ class HealthChecker:
     def run_once(self):
         entry = self.get_next_entry()
         if not entry:
-            print("No entries available from IPv8 received content!")
             return
-
-        print(f"\n[{datetime.now()}] Checking: {entry.url}")
-        print(f"  License: {entry.license}")
 
         health = self.check_torrent_health(entry)
 
@@ -130,9 +124,6 @@ class HealthChecker:
 
         if health["infohash"]:
             mark_content_checked(health["infohash"], ts)
-
-        print(f"  Result: {health.get('total_peers', 0)} total peers ({health.get('seeders', 0)} seeders, {health.get('leechers', 0)} leechers)")
-        print(f"  Metrics: Growth={health.get('growth', 0.0):.2f}%, Shrink={health.get('shrink', 0.0):.2f}%, Exploding={health.get('exploding_estimator', 0.0):.2f}")
 
         return health
 

@@ -34,22 +34,15 @@ class DHTClient:
     
     def get_detailed_stats(self, magnet_link: str, timeout: float = 10.0) -> Dict:
         try:
-            print(f"Getting detailed stats for magnet link: {magnet_link}")
             infohash_hex = self._extract_infohash(magnet_link)
-            print(f"Extracted infohash: {infohash_hex}")
             if not infohash_hex:
                 print(f"Invalid magnet link: {magnet_link}")
                 return {"seeders": 0, "leechers": 0, "total_peers": 0, "error": "invalid_magnet"}
-            
-            print(f"DHT enabled: {self.ses.is_dht_running()}")
-            print(f"DHT nodes: {self.ses.status().dht_nodes}")
-            
+
             # Check if we already have this torrent
             if infohash_hex in self.torrents:
-                print(f"Using existing torrent handle for: {infohash_hex}")
                 h = self.torrents[infohash_hex]
             else:
-                print(f"Adding new torrent: {infohash_hex}")
                 # Add torrent to session (download metadata only)
                 atp = lt.parse_magnet_uri(magnet_link)
                 atp.save_path = '.'  # We don't actually download
@@ -76,7 +69,6 @@ class DHTClient:
                 for a in alerts:
                     # add new torrents to our list of torrent_status
                     if isinstance(a, lt.add_torrent_alert):
-                        print(f"Torrent added: {a.handle.name()}")
                         h = a.handle
                         # h.set_max_connections(60)
                         # h.set_max_uploads(-1)
@@ -100,8 +92,6 @@ class DHTClient:
                     time.sleep(0.5)
                     continue
                 
-                # Get detailed stats
-                print(f"Torrent status: {status}")
                 seeders = status.list_seeds if hasattr(status, 'list_seeds') else 0
                 leechers = status.list_peers - seeders if hasattr(status, 'list_peers') else 0
                 total_peers = status.list_peers if hasattr(status, 'list_peers') else 0

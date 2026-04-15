@@ -97,12 +97,6 @@ class LiberationService:
             source_peer=from_peer.mid.hex()[:16]
         )
 
-        if success:
-            print(f"[RECEIVED] {payload.url[:60]}...")
-            print(f"           License: {payload.license}")
-            print(f"           Infohash: {infohash[:16]}...")
-        else:
-            print(f"[DUPLICATE] Already in database: {infohash[:16]}...")
 
     def on_seedbox_info_received(self, from_peer: Peer, payload: SeedboxInfoPayload) -> None:
         peer_mid = from_peer.mid.hex()[:16]
@@ -119,8 +113,6 @@ class LiberationService:
             "vps_days_remaining": payload.vps_days_remaining,
             "last_seen": int(time.time()),
         }
-        print(f"[SEEDBOX] Updated fleet info from {payload.friendly_name} ({peer_mid})")
-
     def _extract_infohash(self, magnet_link: str) -> Optional[str]:
         try:
             parts = magnet_link.split("btih:")

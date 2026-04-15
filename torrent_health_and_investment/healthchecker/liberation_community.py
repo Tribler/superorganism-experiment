@@ -64,8 +64,6 @@ class LiberationCommunity(Community):
 
     @lazy_wrapper(LiberatedContentPayload)
     def on_liberated_content(self, peer: Peer, payload: LiberatedContentPayload) -> None:
-        self.logger.info("Received communication from peer %s", peer.mid.hex()[:16])
-
         if self.on_content_received_callback:
             try:
                 self.on_content_received_callback(peer, payload)
@@ -97,9 +95,6 @@ class LiberationCommunity(Community):
 
     @lazy_wrapper(SeedboxInfoPayload)
     def on_seedbox_info(self, peer: Peer, payload: SeedboxInfoPayload) -> None:
-        self.logger.info("Received seedbox info from peer %s: %s",
-                         peer.mid.hex()[:16], payload.friendly_name)
-
         if self.on_seedbox_info_callback:
             try:
                 self.on_seedbox_info_callback(peer, payload)
