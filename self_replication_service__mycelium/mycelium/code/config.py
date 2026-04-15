@@ -43,6 +43,7 @@ class Config:
     WHOAMI_GOSSIP_COOLDOWN: int = int(os.getenv("MYCELIUM_WHOAMI_GOSSIP_COOLDOWN", "60"))
     ANNOUNCE_INTERVAL: int = int(os.getenv("MYCELIUM_ANNOUNCE_INTERVAL", "60"))
     PEER_REGISTRY_TTL: int = int(os.getenv("MYCELIUM_PEER_REGISTRY_TTL", "3600"))
+    CONTENT_BROADCAST_INTERVAL: int = int(os.getenv("MYCELIUM_CONTENT_BROADCAST_INTERVAL", str(5 * 3600)))
 
     # Seedbox configuration
     TORRENT_TRACKER: str = os.getenv(

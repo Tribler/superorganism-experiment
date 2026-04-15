@@ -11,8 +11,8 @@ from healthchecker.db import purge_stale_entries
 from healthchecker.liberation_service import LiberationService
 from healthchecker.sampler import HealthChecker, now_unix
 
-_STALE_CONTENT_THRESHOLD_SECONDS = 3600  # 1 hour without re-announcement → stale
-_PURGE_INTERVAL_CYCLES = 12              # purge every 12 × 300s = 1 hour
+_STALE_CONTENT_THRESHOLD_SECONDS = 7200  # 2 hours without re-announcement → stale
+_PURGE_INTERVAL_CYCLES = 144             # purge every 144 × 300s = 12 hours
 _DHT_SAMPLES_KEEP = 30                   # max samples kept per infohash
 
 
