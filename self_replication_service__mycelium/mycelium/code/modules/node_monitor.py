@@ -79,6 +79,9 @@ class NodeMonitor:
                     cost_per_day_usd = round(burn_rate_cents_per_day / 100, 4)
                     # Do NOT use data.get("days_remaining") — SporeStack computes that as
                     # balance/burn_rate which is always 0 for per-cycle-billed servers.
+                    # burn_rate_cents_per_day is always 0 for monthy-billed servers.
+                    # ONLY way to infer/get that information is to wait for /server/quote to support
+                    # the VPS provider used here and then to divide the quote's cost by 30.
 
                 servers = sporestack_client.get_servers(token)
                 if servers:
