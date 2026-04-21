@@ -4,3 +4,6 @@ yt-dlp
 mutagen
 # Bitcoin wallet (watch-only)
 bitcoinlib>=0.6.0
+# SSH deployer for child spawn pipeline
+paramiko
+scp

@@ -86,6 +86,14 @@ class Config:
     # SporeStack / VPS identity
     SPORESTACK_TOKEN_FILE: Path = DATA_DIR / "sporestack_token"
 
+    # SporeStack / VPS provisioning defaults (injected by deployer; mirror mycelium-bootstrap/config.json)
+    VPS_PROVIDER: str      = os.getenv("MYCELIUM_VPS_PROVIDER", "sporestack_eu")
+    VPS_FLAVOR: str        = os.getenv("MYCELIUM_VPS_FLAVOR", "sporestack-eu-4gb")
+    VPS_REGION: str        = os.getenv("MYCELIUM_VPS_REGION", "amsterdam")
+    VPS_OS: str            = os.getenv("MYCELIUM_VPS_OS", "ubuntu-24.04")
+    VPS_DAYS: int          = int(os.getenv("MYCELIUM_VPS_DAYS", "30"))
+    VPS_BILLING_CYCLE: str = os.getenv("MYCELIUM_VPS_BILLING_CYCLE", "monthly")
+
     # Exit codes
     EXIT_SUCCESS: int = 0
     EXIT_FAILURE: int = 1
