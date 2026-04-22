@@ -12,11 +12,11 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import modules.event_logger as event_logger
-import modules.node_monitor as node_monitor
-import modules.peer_registry as peer_registry
-import modules.state as state_module
-import modules.wallet as wallet_module
+import modules.core.event_logger as event_logger
+import modules.monitoring.node_monitor as node_monitor
+import modules.monitoring.peer_registry as peer_registry
+import modules.core.state as state_module
+import modules.core.wallet as wallet_module
 from config import Config
 from modules import CodeSync, CodeSyncError, Seedbox, SeedboxError, LiberationAnnouncer, ContentDownloader, ContentDownloaderError
 from utils import setup_logger
@@ -181,7 +181,7 @@ class Orchestrator:
 
     async def run_decision_loop(self) -> None:
         """Run the autonomous decision loop (spawn / failsafe / topup / do-nothing)."""
-        from modules.decision_loop import run as decision_run
+        from modules.orchestration.decision_loop import run as decision_run
         await decision_run(lambda: self.running)
 
     async def run_seedbox_info_announcer(self) -> None:

@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from modules import sporestack_client
-from modules.wallet import get_wallet
+from . import sporestack_client
+from ..core.wallet import get_wallet
 
 logger = logging.getLogger(__name__)
 

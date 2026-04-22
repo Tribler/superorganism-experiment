@@ -18,11 +18,11 @@ from ipv8_service import IPv8
 
 from config import Config
 from utils import setup_logger
-from modules.liberation_community import LiberationCommunity, LiberatedContentPayload, SeedboxInfoPayload
-from modules.seedbox import Seedbox, ContentInfo
-from modules.wallet import get_wallet
-from modules.node_monitor import get_monitor
-from modules.peer_registry import get_registry
+from .liberation_community import LiberationCommunity, LiberatedContentPayload, SeedboxInfoPayload
+from .seedbox import Seedbox, ContentInfo
+from ..core.wallet import get_wallet
+from ..monitoring.node_monitor import get_monitor
+from ..monitoring.peer_registry import get_registry
 
 logger = setup_logger(
     __name__,

@@ -8,9 +8,9 @@ import logging
 import math
 
 from config import Config
-from modules import sporestack_client
-from modules.node_monitor import NodeState
-from modules.wallet import get_wallet
+from ..monitoring import sporestack_client
+from ..monitoring.node_monitor import NodeState
+from ..core.wallet import get_wallet
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +44,10 @@ async def topup_sporestack(node_state: NodeState) -> None:
         logger.error("[TOPUP] Cannot read SporeStack token: %s", e)
         return
 
-    # Calculate monthly VPS cost (stub — returns None until /server/quote supports our provider)
+    # Calculate monthly VPS cost (always populated: /server/quote with Config fallback)
     monthly_cost_cents = sporestack_client.calculate_monthly_vps_cost(
-        token, node_state.vps_provider, node_state.vps_region
+        Config.VPS_FLAVOR, node_state.vps_provider or Config.VPS_PROVIDER
     )
-    if monthly_cost_cents is None:
-        logger.warning(
-            "[TOPUP] Monthly VPS cost unavailable (SporeStack /server/quote not yet supported "
-            "for provider=%r) — cannot calculate topup amount; skipping",
-            node_state.vps_provider,
-        )
-        return
 
     # Scale to TOPUP_TARGET_DAYS (≈30 days = one month)
     cost_cents = int(monthly_cost_cents * Config.TOPUP_TARGET_DAYS / 30)

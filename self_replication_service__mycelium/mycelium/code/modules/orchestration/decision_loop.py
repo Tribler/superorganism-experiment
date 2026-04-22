@@ -10,18 +10,23 @@ import asyncio
 import logging
 from uuid import uuid4
 
-import modules.deployer as deployer
-import modules.failsafe as failsafe
-import modules.node_monitor as node_monitor
-import modules.peer_registry as peer_registry
-import modules.state as state_module
-import modules.topup as topup
+from ..spawning import deployer
+from . import failsafe
+from ..monitoring import node_monitor
+from ..monitoring import peer_registry
+from ..core import state as state_module
+from ..core import event_logger
+from . import topup
 from config import Config
-from modules.spawn_thresholds import check_spawn_eligibility
+from .spawn_thresholds import check_spawn_eligibility
 
 logger = logging.getLogger(__name__)
 
 _LOG_PREFIX = "[DECISION]"
+
+
+def _log(event_type: str, data: dict) -> None:
+    _log(event_type, data)
 
 
 async def _wait_for_node_state(timeout: int = 300) -> None:
@@ -113,6 +118,13 @@ async def _tick() -> None:
         logger.warning("%s Failsafe already in progress, skipping tick", _LOG_PREFIX)
         return
 
+    _log("decision_tick", {
+        "days_remaining": node_state.days_remaining,
+        "btc_balance_sat": node_state.btc_balance_sat,
+        "caution_trait": caution_trait,
+        "live_peer_count": len(live_peers),
+    })
+
     # PRIORITY 1 — failsafe
     if node_state.days_remaining < Config.FAILSAFE_TRIGGER_DAYS:
         logger.critical(
@@ -121,8 +133,15 @@ async def _tick() -> None:
         )
         try:
             await failsafe.execute_failsafe(node_state, live_peers)
-        except Exception:
+            _log("decision_complete", {
+                "action": "failsafe", "success": True,
+                "days_remaining": node_state.days_remaining,
+            })
+        except Exception as exc:
             logger.exception("%s Failsafe failed — leaving flag set for recovery on restart", _LOG_PREFIX)
+            _log("decision_complete", {
+                "action": "failsafe", "success": False, "error": str(exc),
+            })
         return
 
     # PRIORITY 2 — top up SporeStack balance
@@ -131,7 +150,17 @@ async def _tick() -> None:
             "%s Runway %d days < topup threshold %d days — topping up SporeStack balance",
             _LOG_PREFIX, node_state.days_remaining, Config.TOPUP_TRIGGER_DAYS,
         )
-        await topup.topup_sporestack(node_state)
+        try:
+            await topup.topup_sporestack(node_state)
+            _log("decision_complete", {
+                "action": "topup", "success": True,
+                "days_remaining": node_state.days_remaining,
+            })
+        except Exception as exc:
+            _log("decision_complete", {
+                "action": "topup", "success": False, "error": str(exc),
+            })
+            raise
         return
 
     # PRIORITY 3 — spawn
@@ -144,10 +173,18 @@ async def _tick() -> None:
         )
         ps.mark_spawn_started(child_token)
         await deployer.spawn_child(node_state, caution_trait, child_token)
+        _log("decision_complete", {
+            "action": "spawn", "success": True,
+            "child_token": child_token,
+            "child_share_sat": eligibility.child_share_sat,
+        })
         return
 
     # PRIORITY 4 — do nothing
     logger.info("%s No action: %s", _LOG_PREFIX, eligibility.reason)
+    _log("decision_complete", {
+        "action": "none", "reason": eligibility.reason,
+    })
 
 
 async def run(running_ref) -> None:

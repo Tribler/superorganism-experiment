@@ -1,8 +1,8 @@
 import logging
 
-import modules.state as state_module
-from modules.node_monitor import NodeState
-from modules.spawn_thresholds import compute_child_share, mutate_caution_trait
+from ..core import state as state_module
+from ..monitoring.node_monitor import NodeState
+from ..orchestration.spawn_thresholds import compute_child_share, mutate_caution_trait
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ import random
 from dataclasses import dataclass
 
 from config import Config
-from modules.node_monitor import NodeState
+from ..monitoring.node_monitor import NodeState
 
 logger = logging.getLogger(__name__)
 

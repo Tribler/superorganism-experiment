@@ -14,11 +14,11 @@ import asyncio
 import logging
 from typing import List, Optional
 
-import modules.state as state_module
+from ..core import state as state_module
 from config import Config
-from modules.node_monitor import NodeState
-from modules.peer_registry import PeerInfo
-from modules.wallet import get_wallet
+from ..monitoring.node_monitor import NodeState
+from ..monitoring.peer_registry import PeerInfo
+from ..core.wallet import get_wallet
 
 logger = logging.getLogger(__name__)
 

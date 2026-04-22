@@ -93,6 +93,8 @@ class Config:
     VPS_OS: str            = os.getenv("MYCELIUM_VPS_OS", "ubuntu-24.04")
     VPS_DAYS: int          = int(os.getenv("MYCELIUM_VPS_DAYS", "30"))
     VPS_BILLING_CYCLE: str = os.getenv("MYCELIUM_VPS_BILLING_CYCLE", "monthly")
+    # Fallback monthly VPS cost in cents. Used when SporeStack's /server/quote is still not available.
+    VPS_MONTHLY_COST_CENTS: int = int(os.getenv("MYCELIUM_VPS_MONTHLY_COST_CENTS", "3000"))
 
     # Exit codes
     EXIT_SUCCESS: int = 0

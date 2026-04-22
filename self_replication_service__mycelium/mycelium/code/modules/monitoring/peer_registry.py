@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from ipv8.peer import Peer
 
-from modules.liberation_community import SeedboxInfoPayload
+from ..seeding.liberation_community import SeedboxInfoPayload
 from utils import setup_logger
 from config import Config
 

@@ -50,17 +50,35 @@ def create_invoice(token: str, dollars: int) -> Optional[dict]:
         return None
 
 
-def calculate_monthly_vps_cost(token: str, provider: str, region: str) -> Optional[int]:
+def calculate_monthly_vps_cost(flavor: str, provider: str) -> int:
     """
-    Return the monthly VPS cost in cents, or None if not available.
+    Monthly (30-day) VPS cost in cents.
 
-    TODO: Use GET /server/quote?flavor=<flavor>&days=30&provider=<provider> once
-    the endpoint supports the provider in use. Until then this returns None.
-
-    burn_rate_cents_per_day is always 0 for monthly-billed servers, so /token/info
-    cannot be used — this is the only alternative.
+    Tries GET /server/quote?flavor=<>&days=30&provider=<>; falls back to
+    Config.VPS_MONTHLY_COST_CENTS on any error (including the 422
+    "only DigitalOcean or Vultr, for now" response for sporestack_eu).
+    Never returns None — always a positive int — so callers can treat it
+    as a known-good sizing input.
     """
-    return None
+    try:
+        url = (
+            f"https://api.sporestack.com/server/quote"
+            f"?flavor={flavor}&days=30&provider={provider}"
+        )
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                cents = int(data.get("cents", 0))
+                if cents > 0:
+                    return cents
+    except Exception as e:
+        logger.debug("calculate_monthly_vps_cost quote failed: %s", e)
+    logger.info(
+        "calculate_monthly_vps_cost: falling back to Config.VPS_MONTHLY_COST_CENTS=%d",
+        Config.VPS_MONTHLY_COST_CENTS,
+    )
+    return Config.VPS_MONTHLY_COST_CENTS
 
 
 def get_servers(token: str) -> Optional[list]:
