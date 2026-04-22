@@ -39,10 +39,10 @@ other ideas: Bounties, seedbox fleet? status of IPv8 network? Money in system, a
 
 ## General
 
-All resources are listed in the [resources/](resources/) directory, including icons, datasets, and other assets. They must be converted using the PySide6 resource compiler. Run the following command after adding new resources:
+Qt UI resources are listed in the [ui/resources/](ui/resources/) directory, including icons, fonts, images, and the resource manifest. They must be converted using the PySide6 resource compiler. Run the following command after adding new UI resources:
 
 ```bash
-pyside6-rcc resources.qrc -o resources_rc.py
+pyside6-rcc ui/resources/resources.qrc -o ui/resources/resources_rc.py
 ```
 
 ## Local Bitcoin regtest environment
@@ -65,13 +65,18 @@ The script requires:
 - bash
 - bitcoind (part of **Bitcoin Core**)
 - bitcoin-cli (part of **Bitcoin Core**)
+- jq (for JSON parsing)
 
-### Installing Bitcoin Core
+### Installing dependencies
 
 #### macOS
 
 ```bash
 brew install bitcoin
+```
+
+```bash
+brew install jq
 ```
 
 ### Project-local data directory
@@ -108,17 +113,19 @@ scripts/regtest.sh stop
 scripts/regtest.sh reset
 scripts/regtest.sh status
 scripts/regtest.sh mine [n]
-scripts/regtest.sh send <address> [amount]
+scripts/regtest.sh send <address> [amount] [op_return_hex]
+scripts/regtest.sh treasury-address
 ```
 
-| Command  | Description                                                                                                                                                                                                                                                    |
-|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `start`  | Starts the regtest node, creates the config file if needed, loads or creates the wallet, and ensures the wallet is funded. On first startup, the script mines 101 blocks. This is necessary because coinbase rewards must mature before they become spendable. |
-| `stop`   | Stops the running regtest node.                                                                                                                                                                                                                                |
-| `reset`  | Deletes the local regtest blockchain and wallet state, then starts from a clean environment. This is useful for repeatable integration tests.                                                                                                                  |
-| `status` | Prints basic blockchain and wallet state.                                                                                                                                                                                                                      |
-| `mine`   | Mines one or more new regtest blocks. This is especially useful for confirming transactions during testing.                                                                                                                                                    |
-| `send`   | Sends a demo transaction from the local wallet.                                                                                                                                                                                                                |
+| Command            | Description                                                                                                                                                                                                                                                    |
+|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `start`            | Starts the regtest node, creates the config file if needed, loads or creates the wallet, and ensures the wallet is funded. On first startup, the script mines 101 blocks. This is necessary because coinbase rewards must mature before they become spendable. |
+| `stop`             | Stops the running regtest node.                                                                                                                                                                                                                                |
+| `reset`            | Deletes the local regtest blockchain and wallet state, then starts from a clean environment. This is useful for repeatable integration tests.                                                                                                                  |
+| `status`           | Prints basic blockchain and wallet state.                                                                                                                                                                                                                      |
+| `mine`             | Mines one or more new regtest blocks. This is especially useful for confirming transactions during testing.                                                                                                                                                    |
+| `send`             | Sends a demo transaction from the local wallet.                                                                                                                                                                                                                |
+| `treasury-address` | Prints the address of the treasury. This is useful for funding the wallet from external tools or for testing incoming transactions.                                                                                                                            |
 
 ## Mycelium
 
@@ -323,4 +330,3 @@ python analysis/plot.py data/events.csv -o data/plots
 ```
 
 ## Democracy
-
