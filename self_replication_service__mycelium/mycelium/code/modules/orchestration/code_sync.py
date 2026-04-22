@@ -7,9 +7,11 @@ Checks repository for changes and automatically updates.
 import subprocess
 from pathlib import Path
 from typing import Optional
+
+from config import Config
 from utils import setup_logger
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 class CodeSyncError(Exception):
@@ -60,13 +62,13 @@ class CodeSync:
             output = self._run_git_command("ls-remote", self.remote, self.branch)
 
             if not output:
-                logger.warning(f"Empty response from ls-remote for {remote_ref}")
+                logger.warning("Empty response from ls-remote for %s", remote_ref)
                 return None
 
             hash_value = output.split()[0]
             return hash_value
         except GitOperationError as e:
-            logger.warning(f"Failed to query remote: {e}")
+            logger.warning("Failed to query remote: %s", e)
             return None
 
     def has_updates(self) -> bool:
@@ -86,10 +88,10 @@ class CodeSync:
                 logger.info("Local changes detected, stashing before pull")
                 self._run_git_command("stash", "push", "-m", "Auto-stash before update")
 
-            logger.info(f"Pulling updates from {self.remote}/{self.branch}")
+            logger.info("Pulling updates from %s/%s", self.remote, self.branch)
             self._run_git_command("pull", self.remote, self.branch)
 
             return True
         except GitOperationError as e:
-            logger.error(f"Failed to pull updates: {e}")
+            logger.error("Failed to pull updates: %s", e)
             raise

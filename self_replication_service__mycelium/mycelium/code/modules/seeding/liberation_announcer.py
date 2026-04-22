@@ -54,9 +54,9 @@ class LiberationAnnouncer:
 
         key_path = Path(self.key_file)
         if key_path.exists():
-            logger.info(f"Using existing key: {key_path}")
+            logger.info("Using existing key: %s", key_path)
         else:
-            logger.info(f"Creating new key: {key_path}")
+            logger.info("Creating new key: %s", key_path)
 
         builder.add_key("liberation_peer", "medium", str(key_path))
 
@@ -96,8 +96,8 @@ class LiberationAnnouncer:
         logger.info("New-peer content burst callback registered")
 
         logger.info("LiberationCommunity is running")
-        logger.info(f"Community ID: {self.community.community_id.hex()}")
-        logger.info(f"My peer ID: {self.community.my_peer.mid.hex()[:16]}...")
+        logger.info("Community ID: %s", self.community.community_id.hex())
+        logger.info("My peer ID: %s...", self.community.my_peer.mid.hex()[:16])
 
     async def announce_content(self) -> int:
         """
@@ -131,7 +131,7 @@ class LiberationAnnouncer:
         Args:
             interval: Seconds between full-broadcast cycles
         """
-        logger.info(f"Starting announcement loop (interval: {interval}s)")
+        logger.info("Starting announcement loop (interval: %ds)", interval)
 
         while True:
             try:
@@ -139,11 +139,11 @@ class LiberationAnnouncer:
                 await asyncio.sleep(5)
 
                 peer_count = len(self.community.get_peers()) if self.community else 0
-                logger.info(f"Connected to {peer_count} peer(s)")
+                logger.info("Connected to %d peer(s)", peer_count)
 
                 if peer_count > 0:
                     sent_count = await self.announce_content()
-                    logger.info(f"Full periodic broadcast: {sent_count} payload(s) sent across all peers")
+                    logger.info("Full periodic broadcast: %d payload(s) sent across all peers", sent_count)
 
                 await asyncio.sleep(interval)
 
@@ -151,7 +151,7 @@ class LiberationAnnouncer:
                 logger.info("Announcement loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in announcement loop: {e}")
+                logger.error("Error in announcement loop: %s", e)
                 await asyncio.sleep(interval)
 
     async def _send_all_content_to_peer(self, peer) -> None:

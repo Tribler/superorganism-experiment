@@ -3,16 +3,17 @@ Aggregates BTC balance and SporeStack runway details into a NodeState.
 Decision loop and SeedboxInfoPayload broadcast consume info.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from config import Config
+from utils import setup_logger
 from . import sporestack_client
 from ..core.wallet import get_wallet
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 @dataclass

@@ -66,7 +66,7 @@ class Orchestrator:
 
     def _handle_shutdown(self, signum: int, frame) -> None:
         """Handle shutdown signals."""
-        logger.info(f"Received signal {signum}, initiating shutdown")
+        logger.info("Received signal %d, initiating shutdown", signum)
         self.running = False
         for task in self._tasks:
             task.cancel()
@@ -87,7 +87,7 @@ class Orchestrator:
                     logger.info("Updates pulled successfully, restarting")
                     os._exit(Config.EXIT_RESTART)
             except CodeSyncError as e:
-                logger.error(f"Code sync error: {e}")
+                logger.error("Code sync error: %s", e)
 
             await asyncio.sleep(Config.UPDATE_CHECK_INTERVAL)
 
@@ -108,14 +108,14 @@ class Orchestrator:
         ] if Config.CONTENT_DIR.exists() else []
 
         if content_files:
-            logger.info(f"Content directory already has {len(content_files)} files, skipping download")
+            logger.info("Content directory already has %d files, skipping download", len(content_files))
             return
 
         if not Config.VIDEO_IDS_FILE.exists():
-            logger.warning(f"Video IDs file not found at {Config.VIDEO_IDS_FILE}, skipping content download")
+            logger.warning("Video IDs file not found at %s, skipping content download", Config.VIDEO_IDS_FILE)
             return
 
-        logger.info(f"Starting content download from {Config.VIDEO_IDS_FILE}")
+        logger.info("Starting content download from %s", Config.VIDEO_IDS_FILE)
         try:
             downloader = ContentDownloader(
                 video_ids_file=Config.VIDEO_IDS_FILE,
@@ -125,11 +125,11 @@ class Orchestrator:
             )
             loop = asyncio.get_event_loop()
             count = await loop.run_in_executor(self.executor, downloader.download_until_threshold)
-            logger.info(f"Content download finished: {count} files downloaded")
+            logger.info("Content download finished: %d files downloaded", count)
         except ContentDownloaderError as e:
-            logger.error(f"Content download failed: {e}")
+            logger.error("Content download failed: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected content download error: {e}", exc_info=True)
+            logger.error("Unexpected content download error: %s", e, exc_info=True)
 
     async def initialize_seedbox(self) -> bool:
         """Initialize seedbox in executor thread."""
@@ -142,10 +142,10 @@ class Orchestrator:
             logger.info("Seedbox initialized successfully")
             return True
         except SeedboxError as e:
-            logger.error(f"Seedbox initialization failed: {e}")
+            logger.error("Seedbox initialization failed: %s", e)
             return False
         except Exception as e:
-            logger.error(f"Unexpected seedbox init error: {e}", exc_info=True)
+            logger.error("Unexpected seedbox init error: %s", e, exc_info=True)
             return False
 
     async def run_seedbox_loop(self) -> None:
@@ -158,7 +158,7 @@ class Orchestrator:
                 Config.SEEDBOX_STATUS_INTERVAL
             )
         except Exception as e:
-            logger.error(f"Seedbox loop error: {e}", exc_info=True)
+            logger.error("Seedbox loop error: %s", e, exc_info=True)
 
     async def run_torrent_announcer(self) -> None:
         """Run the IPV8 liberation announcer."""
@@ -166,7 +166,7 @@ class Orchestrator:
             await self.announcer.start()
             await self.announcer.announce_loop(interval=Config.CONTENT_BROADCAST_INTERVAL)
         except Exception as e:
-            logger.error(f"Announcer error: {e}", exc_info=True)
+            logger.error("Announcer error: %s", e, exc_info=True)
         finally:
             await self.announcer.stop()
 
@@ -186,33 +186,33 @@ class Orchestrator:
 
     async def run_seedbox_info_announcer(self) -> None:
         """Run the seedbox info broadcast loop (waits for community init)."""
-        logger.info("[SEEDBOX-INFO] Waiting for community to initialize...")
+        logger.info("Waiting for community to initialize...")
         # Wait until the announcer has initialized the community
         wait_count = 0
         while self.running and self.announcer.community is None:
             wait_count += 1
             if wait_count % 10 == 0:
-                logger.info("[SEEDBOX-INFO] Still waiting for community... (%ds)", wait_count)
+                logger.info("Still waiting for community... (%ds)", wait_count)
             await asyncio.sleep(1)
 
         if not self.running:
-            logger.info("[SEEDBOX-INFO] Orchestrator stopped before community init")
+            logger.info("Orchestrator stopped before community init")
             return
 
-        logger.info("[SEEDBOX-INFO] Community ready, starting seedbox info loop")
+        logger.info("Community ready, starting seedbox info loop")
         try:
             await self.announcer.seedbox_info_loop(interval=Config.WHOAMI_BROADCAST_INTERVAL)
         except Exception as e:
-            logger.error(f"Seedbox info announcer error: {e}", exc_info=True)
+            logger.error("Seedbox info announcer error: %s", e, exc_info=True)
 
     async def run(self) -> None:
         """Main orchestrator loop."""
         self.running = True
         logger.info("Orchestrator starting")
-        logger.info(f"Repository: {Config.REPO_URL}")
-        logger.info(f"Branch: {Config.REPO_BRANCH}")
-        logger.info(f"Update check interval: {Config.UPDATE_CHECK_INTERVAL}s")
-        logger.info(f"Content directory: {Config.CONTENT_DIR}")
+        logger.info("Repository: %s", Config.REPO_URL)
+        logger.info("Branch: %s", Config.REPO_BRANCH)
+        logger.info("Update check interval: %ds", Config.UPDATE_CHECK_INTERVAL)
+        logger.info("Content directory: %s", Config.CONTENT_DIR)
 
         # Download content if needed (one-time, before seedbox)
         await self.download_content_if_needed()
@@ -284,7 +284,7 @@ def main() -> int:
         logger.info("Interrupted by user")
         return Config.EXIT_SUCCESS
     except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error("Fatal error: %s", e, exc_info=True)
         return Config.EXIT_FAILURE
 
 

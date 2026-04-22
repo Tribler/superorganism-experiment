@@ -11,7 +11,7 @@ from pathlib import Path
 from config import Config
 from utils import setup_logger
 
-logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log")
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
@@ -89,20 +89,20 @@ class ContentDownloader:
                 timeout=self.DOWNLOAD_TIMEOUT,
             )
             if result.returncode != 0:
-                logger.warning(f"yt-dlp failed for {video_id}: {result.stderr[:200]}")
+                logger.warning("yt-dlp failed for %s: %s", video_id, result.stderr[:200])
                 return False
             # Clean up leftover thumbnail files (yt-dlp leaves .webp/.png after embedding)
             for thumb in self.content_dir.glob(f"{video_id}_*.webp"):
                 thumb.unlink()
             for thumb in self.content_dir.glob(f"{video_id}_*.png"):
                 thumb.unlink()
-            logger.info(f"Downloaded {video_id}")
+            logger.info("Downloaded %s", video_id)
             return True
         except subprocess.TimeoutExpired:
-            logger.warning(f"yt-dlp timed out for {video_id}")
+            logger.warning("yt-dlp timed out for %s", video_id)
             return False
         except Exception as e:
-            logger.warning(f"Download error for {video_id}: {e}")
+            logger.warning("Download error for %s: %s", video_id, e)
             return False
 
     def download_until_threshold(self) -> int:
@@ -115,7 +115,7 @@ class ContentDownloader:
 
         all_ids = [line.strip() for line in text.splitlines() if line.strip()]
         all_ids = [vid for vid in all_ids if VIDEO_ID_PATTERN.match(vid)]
-        logger.info(f"Loaded {len(all_ids)} video IDs from {self.video_ids_file}")
+        logger.info("Loaded %d video IDs from %s", len(all_ids), self.video_ids_file)
 
         if not all_ids:
             logger.warning("No valid video IDs found")
@@ -126,14 +126,14 @@ class ContentDownloader:
         # Skip already-downloaded
         already_downloaded = self._get_already_downloaded_ids()
         if already_downloaded:
-            logger.info(f"Found {len(already_downloaded)} already-downloaded videos, skipping them")
+            logger.info("Found %d already-downloaded videos, skipping them", len(already_downloaded))
         pending = [vid for vid in all_ids if vid not in already_downloaded]
-        logger.info(f"{len(pending)} videos remaining to download")
+        logger.info("%d videos remaining to download", len(pending))
 
         # Check if already at threshold
         current_usage = self._get_disk_usage_percent()
         if current_usage >= self.disk_threshold:
-            logger.info(f"Disk already at {current_usage:.1f}% (threshold: {self.disk_threshold}%), skipping downloads")
+            logger.info("Disk already at %.1f%% (threshold: %d%%), skipping downloads", current_usage, self.disk_threshold)
             return 0
 
         downloaded = 0
@@ -143,19 +143,19 @@ class ContentDownloader:
             # Check disk threshold before each download
             current_usage = self._get_disk_usage_percent()
             if current_usage >= self.disk_threshold:
-                logger.info(f"Disk at {current_usage:.1f}%, reached threshold of {self.disk_threshold}%")
+                logger.info("Disk at %.1f%%, reached threshold of %d%%", current_usage, self.disk_threshold)
                 break
 
             if self._download_video(video_id):
                 downloaded += 1
                 consecutive_failures = 0
                 if downloaded % 10 == 0:
-                    logger.info(f"Progress: {downloaded} downloaded, disk at {self._get_disk_usage_percent():.1f}%")
+                    logger.info("Progress: %d downloaded, disk at %.1f%%", downloaded, self._get_disk_usage_percent())
             else:
                 consecutive_failures += 1
                 if consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
-                    logger.error(f"Stopping after {self.MAX_CONSECUTIVE_FAILURES} consecutive failures")
+                    logger.error("Stopping after %d consecutive failures", self.MAX_CONSECUTIVE_FAILURES)
                     break
 
-        logger.info(f"Content download complete: {downloaded} new files, disk at {self._get_disk_usage_percent():.1f}%")
+        logger.info("Content download complete: %d new files, disk at %.1f%%", downloaded, self._get_disk_usage_percent())
         return downloaded

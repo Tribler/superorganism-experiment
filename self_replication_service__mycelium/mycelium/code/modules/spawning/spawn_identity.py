@@ -12,7 +12,6 @@ leaves spawn_in_progress=True so the whole spawn retries from scratch on restart
 """
 
 import asyncio
-import logging
 import math
 import time
 from dataclasses import dataclass
@@ -21,12 +20,13 @@ from bitcoinlib.mnemonic import Mnemonic
 from bitcoinlib.wallets import Wallet, wallet_delete
 
 from config import Config
+from utils import setup_logger
 from ..monitoring import sporestack_client
 from ..monitoring.node_monitor import NodeState
 from .ssh_deployer import generate_ssh_keypair
 from ..core.wallet import get_wallet
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 _SS_MIN_INVOICE_DOLLARS = 5
 _POLL_INTERVAL = 30
@@ -110,12 +110,12 @@ async def _wait_for_credit(sporestack_token: str) -> int:
             if cents > 0:
                 elapsed = int(time.time() - start)
                 logger.info(
-                    "[SPAWN-IDENTITY] SporeStack credit landed after %ds: %d cents",
+                    "SporeStack credit landed after %ds: %d cents",
                     elapsed, cents,
                 )
                 return cents
         elapsed = int(time.time() - start)
-        logger.info("[SPAWN-IDENTITY] Waiting for credit... (%ds elapsed)", elapsed)
+        logger.info("Waiting for credit... (%ds elapsed)", elapsed)
         await asyncio.sleep(_POLL_INTERVAL)
     raise SpawnIdentityError(
         f"Timeout ({_POLL_TIMEOUT}s) waiting for SporeStack credit to land"
@@ -133,7 +133,7 @@ async def prepare_child_identity(
     child_token is the local spawn ID (e.g. "child-a1b2c3d4") already generated
     by decision_loop._tick — NOT a SporeStack token.
     """
-    logger.info("[SPAWN-IDENTITY] Preparing identity for %s", child_token)
+    logger.info("Preparing identity for %s", child_token)
 
     # 1) SSH keypair
     key_path = Config.DATA_DIR / "spawn" / child_token / "ssh" / "id_ed25519"
@@ -145,20 +145,20 @@ async def prepare_child_identity(
         )
     except Exception as e:
         raise SpawnIdentityError(f"SSH keypair generation failed: {e}") from e
-    logger.info("[SPAWN-IDENTITY] SSH keypair ready at %s", priv_key_path)
+    logger.info("SSH keypair ready at %s", priv_key_path)
 
     # 2) BTC wallet (temp, isolated — mnemonic + address are the only survivors)
     try:
         btc_mnemonic, btc_address = _generate_child_btc_wallet(child_token)
     except Exception as e:
         raise SpawnIdentityError(f"Child BTC wallet generation failed: {e}") from e
-    logger.info("[SPAWN-IDENTITY] Child BTC address: %s", btc_address)
+    logger.info("Child BTC address: %s", btc_address)
 
     # 3) SporeStack token
     sporestack_token = await asyncio.to_thread(sporestack_client.generate_token)
     if not sporestack_token:
         raise SpawnIdentityError("generate_token returned None")
-    logger.info("[SPAWN-IDENTITY] Minted SporeStack token")
+    logger.info("Minted SporeStack token")
 
     # 4) Size the funding (~30 days at the current flavor/provider cost)
     monthly_cents = sporestack_client.calculate_monthly_vps_cost(
@@ -167,7 +167,7 @@ async def prepare_child_identity(
     needed_cents = int(monthly_cents * Config.TOPUP_TARGET_DAYS / 30)
     needed_dollars = max(_SS_MIN_INVOICE_DOLLARS, math.ceil(needed_cents / 100))
     logger.info(
-        "[SPAWN-IDENTITY] Funding: monthly=%d cents, target_days=%d → $%d",
+        "Funding: monthly=%d cents, target_days=%d → $%d",
         monthly_cents, Config.TOPUP_TARGET_DAYS, needed_dollars,
     )
 
@@ -184,7 +184,7 @@ async def prepare_child_identity(
         raise SpawnIdentityError(f"Cannot parse payment URI: {response!r}")
     pay_address, amount_sat = parsed
     logger.info(
-        "[SPAWN-IDENTITY] Invoice: send %d sat to %s (for $%d)",
+        "Invoice: send %d sat to %s (for $%d)",
         amount_sat, pay_address, needed_dollars,
     )
 
@@ -201,7 +201,7 @@ async def prepare_child_identity(
         txid = await asyncio.to_thread(wallet.send, pay_address, amount_sat)
     except Exception as e:
         raise SpawnIdentityError(f"Invoice payment failed: {e}") from e
-    logger.info("[SPAWN-IDENTITY] Paid invoice — txid %s", txid)
+    logger.info("Paid invoice — txid %s", txid)
 
     # 7) Poll for credit landing
     funded_cents = await _wait_for_credit(sporestack_token)

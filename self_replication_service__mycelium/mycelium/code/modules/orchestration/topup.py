@@ -4,15 +4,15 @@ Called by the decision loop when runway drops below TOPUP_TRIGGER_DAYS.
 """
 
 import asyncio
-import logging
 import math
 
 from config import Config
+from utils import setup_logger
 from ..monitoring import sporestack_client
 from ..monitoring.node_monitor import NodeState
 from ..core.wallet import get_wallet
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 _SS_MIN_INVOICE_DOLLARS = 5
 
@@ -41,7 +41,7 @@ async def topup_sporestack(node_state: NodeState) -> None:
     try:
         token = Config.SPORESTACK_TOKEN_FILE.read_text().strip()
     except OSError as e:
-        logger.error("[TOPUP] Cannot read SporeStack token: %s", e)
+        logger.error("Cannot read SporeStack token: %s", e)
         return
 
     # Calculate monthly VPS cost (always populated: /server/quote with Config fallback)
@@ -56,48 +56,48 @@ async def topup_sporestack(node_state: NodeState) -> None:
 
     if needed_cents <= 0:
         logger.info(
-            "[TOPUP] SS balance $%.2f already covers %d days — no topup needed",
+            "SS balance $%.2f already covers %d days — no topup needed",
             current_cents / 100, Config.TOPUP_TARGET_DAYS,
         )
         return
 
     needed_dollars = max(_SS_MIN_INVOICE_DOLLARS, math.ceil(needed_cents / 100))
     logger.info(
-        "[TOPUP] Need $%.2f for %d days; current SS balance $%.2f → buying $%d",
+        "Need $%.2f for %d days; current SS balance $%.2f → buying $%d",
         needed_cents / 100, Config.TOPUP_TARGET_DAYS, current_cents / 100, needed_dollars,
     )
 
     # Create invoice
     response = await asyncio.to_thread(sporestack_client.create_invoice, token, needed_dollars)
     if not response:
-        logger.error("[TOPUP] Failed to create SporeStack invoice")
+        logger.error("Failed to create SporeStack invoice")
         return
 
     invoice = response.get("invoice", response)
     payment_uri = invoice.get("payment_uri", "")
     parsed = _parse_bitcoin_uri(payment_uri)
     if not parsed:
-        logger.error("[TOPUP] Cannot parse payment URI: %r", response)
+        logger.error("Cannot parse payment URI: %r", response)
         return
 
     address, amount_sat = parsed
-    logger.info("[TOPUP] Invoice: send %d sat to %s (for $%d)", amount_sat, address, needed_dollars)
+    logger.info("Invoice: send %d sat to %s (for $%d)", amount_sat, address, needed_dollars)
 
     # Check BTC balance
     wallet = get_wallet()
     if wallet is None:
-        logger.error("[TOPUP] Wallet not initialized")
+        logger.error("Wallet not initialized")
         return
     wallet_sat = await asyncio.to_thread(wallet.get_balance_satoshis)
     if wallet_sat < amount_sat:
         logger.error(
-            "[TOPUP] Insufficient BTC: have %d sat, need %d sat", wallet_sat, amount_sat
+            "Insufficient BTC: have %d sat, need %d sat", wallet_sat, amount_sat
         )
         return
 
     # Send payment
     try:
         txid = await asyncio.to_thread(wallet.send, address, amount_sat)
-        logger.info("[TOPUP] Sent %d sat to %s — txid %s", amount_sat, address, txid)
+        logger.info("Sent %d sat to %s — txid %s", amount_sat, address, txid)
     except Exception as e:
-        logger.error("[TOPUP] Payment failed: %s", e)
+        logger.error("Payment failed: %s", e)

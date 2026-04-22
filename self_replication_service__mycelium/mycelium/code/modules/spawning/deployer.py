@@ -1,10 +1,10 @@
-import logging
-
+from config import Config
+from utils import setup_logger
 from ..core import state as state_module
 from ..monitoring.node_monitor import NodeState
 from ..orchestration.spawn_thresholds import compute_child_share, mutate_caution_trait
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 async def spawn_child(node_state: NodeState, caution_trait: float, child_token: str) -> None:
@@ -27,7 +27,7 @@ async def spawn_child(node_state: NodeState, caution_trait: float, child_token: 
         # (same pattern as MYCELIUM_CAUTION_TRAIT) so the cold wallet fallback
         # propagates to all descendant nodes automatically.
         logger.info(
-            "[SPAWNER STUB] would spawn child: token=%s, share=%d sat, caution=%.3f"
+            "Would spawn child: token=%s, share=%d sat, caution=%.3f"
             " — not implemented",
             child_token, child_share_sat, child_caution,
         )
@@ -35,5 +35,5 @@ async def spawn_child(node_state: NodeState, caution_trait: float, child_token: 
         # success=False: stub attempt not recorded in spawn_history;
         # will retry on next tick if still eligible
     except Exception:
-        logger.error("[SPAWNER] Unexpected error", exc_info=True)
+        logger.error("Unexpected error", exc_info=True)
         # leave flag set — retry on next restart

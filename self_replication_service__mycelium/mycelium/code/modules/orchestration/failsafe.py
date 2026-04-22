@@ -11,16 +11,16 @@ inherited by all child nodes via MYCELIUM_DEFAULT_BTC_ADDRESS env var).
 """
 
 import asyncio
-import logging
 from typing import List, Optional
 
 from ..core import state as state_module
 from config import Config
+from utils import setup_logger
 from ..monitoring.node_monitor import NodeState
 from ..monitoring.peer_registry import PeerInfo
 from ..core.wallet import get_wallet
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 def select_best_peer(peers: List[PeerInfo]) -> Optional[PeerInfo]:
@@ -46,17 +46,17 @@ async def _sweep_funds(
     except Exception as e:
         if not fallback_used and Config.DEFAULT_BTC_ADDRESS:
             logger.warning(
-                "[FAILSAFE] Sweep to peer failed (%s) — retrying with cold wallet", e
+                "Sweep to peer failed (%s) — retrying with cold wallet", e
             )
             actual_address = Config.DEFAULT_BTC_ADDRESS
             txid = await asyncio.to_thread(wallet.sweep_all, Config.DEFAULT_BTC_ADDRESS)
         else:
-            logger.critical("[FAILSAFE] Sweep failed and no fallback available: %s", e)
+            logger.critical("Sweep failed and no fallback available: %s", e)
             raise  # leave failsafe_in_progress=True so recovery retries on next restart
 
     suffix = " (cold wallet)" if (fallback_used or actual_address == Config.DEFAULT_BTC_ADDRESS) else ""
     logger.info(
-        "[FAILSAFE] Swept %d sat to %s%s — txid %s",
+        "Swept %d sat to %s%s — txid %s",
         node_state.btc_balance_sat, actual_address, suffix, txid,
     )
 
@@ -75,10 +75,10 @@ async def execute_failsafe(node_state: NodeState, peers: List[PeerInfo]) -> None
     elif Config.DEFAULT_BTC_ADDRESS:
         target_address = Config.DEFAULT_BTC_ADDRESS
         fallback_used = True
-        logger.warning("[FAILSAFE] No live peers — falling back to cold wallet")
+        logger.warning("No live peers — falling back to cold wallet")
     else:
         logger.critical(
-            "[FAILSAFE] No peers and no default address configured — funds may be lost on VPS expiry!"
+            "No peers and no default address configured — funds may be lost on VPS expiry!"
         )
         return
 

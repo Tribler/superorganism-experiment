@@ -1,6 +1,5 @@
 """SSH-based deployment mechanics for provisioning child mycelium nodes."""
 
-import logging
 import os
 import subprocess
 import time
@@ -10,7 +9,10 @@ from typing import Dict, Optional, Tuple
 import paramiko
 from scp import SCPClient
 
-logger = logging.getLogger(__name__)
+from config import Config
+from utils import setup_logger
+
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 class DeployerError(Exception):
@@ -85,7 +87,7 @@ class SSHDeployer:
         for key_name, key_class in key_classes:
             try:
                 key = key_class.from_private_key_file(key_path)
-                logger.debug(f"Loaded {key_name} key from {key_path}")
+                logger.debug("Loaded %s key from %s", key_name, key_path)
                 return key
             except paramiko.SSHException:
                 continue
@@ -131,7 +133,7 @@ class SSHDeployer:
         last_error = None
         for attempt in range(1, retry_count + 1):
             try:
-                logger.info(f"Connecting to {user}@{host}:{port} (attempt {attempt}/{retry_count})")
+                logger.info("Connecting to %s@%s:%d (attempt %d/%d)", user, host, port, attempt, retry_count)
 
                 self.client.connect(
                     hostname=host,
@@ -144,14 +146,14 @@ class SSHDeployer:
                 )
 
                 self.client.save_host_keys(str(self.known_hosts_path))
-                logger.info(f"Connected to {host}")
+                logger.info("Connected to %s", host)
                 return
 
             except Exception as e:
                 last_error = e
-                logger.warning(f"Connection attempt {attempt} failed: {e}")
+                logger.warning("Connection attempt %d failed: %s", attempt, e)
                 if attempt < retry_count:
-                    logger.info(f"Retrying in {retry_delay}s...")
+                    logger.info("Retrying in %ds...", retry_delay)
                     time.sleep(retry_delay)
 
         raise SSHConnectionError(f"Failed to connect after {retry_count} attempts: {last_error}")
@@ -160,7 +162,7 @@ class SSHDeployer:
         if self.client:
             self.client.close()
             self.client = None
-            logger.info(f"Disconnected from {self.host}")
+            logger.info("Disconnected from %s", self.host)
 
     def run_command(
         self,
@@ -173,7 +175,7 @@ class SSHDeployer:
         if not self.client:
             raise DeployerError("Not connected. Call connect() first.")
 
-        logger.debug(f"Running: {command}")
+        logger.debug("Running: %s", command)
 
         stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
 
@@ -197,14 +199,14 @@ class SSHDeployer:
         if not self.client:
             raise DeployerError("Not connected. Call connect() first.")
 
-        logger.info(f"Uploading {local_path} -> {remote_path}")
+        logger.info("Uploading %s -> %s", local_path, remote_path)
 
         with SCPClient(self.client.get_transport()) as scp:
             scp.put(local_path, remote_path)
 
     def upload_directory(self, local_path: str, remote_path: str) -> None:
         """Upload a directory using rsync over SSH."""
-        logger.info(f"Uploading directory {local_path} -> {remote_path}")
+        logger.info("Uploading directory %s -> %s", local_path, remote_path)
 
         self.run_command(f"mkdir -p {remote_path}")
 
@@ -215,7 +217,7 @@ class SSHDeployer:
             f"{self.user}@{self.host}:{remote_path}/"
         ]
 
-        logger.debug(f"Running: {' '.join(rsync_cmd)}")
+        logger.debug("Running: %s", ' '.join(rsync_cmd))
         result = subprocess.run(rsync_cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
@@ -300,11 +302,11 @@ class SSHDeployer:
         if extra_ports:
             for port in extra_ports:
                 self.run_command(f"ufw allow {port}")
-                logger.info(f"Allowed extra port: {port}")
+                logger.info("Allowed extra port: %s", port)
 
         self.run_command("ufw --force enable")
         stdout, _, _ = self.run_command("ufw status verbose", check=False)
-        logger.info(f"Firewall status:\n{stdout}")
+        logger.info("Firewall status:\n%s", stdout)
 
         logger.info("Firewall configured successfully")
 
@@ -322,7 +324,7 @@ class SSHDeployer:
         repo_url = repo_url or self.MYCELIUM_REPO_URL
         subpath = subpath or self.MYCELIUM_SUBPATH
 
-        logger.info(f"Deploying mycelium from {repo_url} (subpath: {subpath})")
+        logger.info("Deploying mycelium from %s (subpath: %s)", repo_url, subpath)
 
         self.run_command(f"mkdir -p {self.REMOTE_CONTENT_DIR}")
         self.run_command(f"mkdir -p {self.REMOTE_LOG_DIR}")
@@ -363,7 +365,7 @@ class SSHDeployer:
         if not Path(local_path).exists():
             raise DeployerError(f"Video IDs file not found: {local_path}")
 
-        logger.info(f"Uploading video IDs file: {local_path} -> {self.REMOTE_VIDEO_IDS_FILE}")
+        logger.info("Uploading video IDs file: %s -> %s", local_path, self.REMOTE_VIDEO_IDS_FILE)
         self.upload_file(local_path, self.REMOTE_VIDEO_IDS_FILE)
         logger.info("Video IDs file deployed successfully")
 
@@ -372,7 +374,7 @@ class SSHDeployer:
         if not Path(local_path).exists():
             raise DeployerError(f"Cookies file not found: {local_path}")
 
-        logger.info(f"Uploading cookies file: {local_path} -> {self.REMOTE_COOKIES_FILE}")
+        logger.info("Uploading cookies file: %s -> %s", local_path, self.REMOTE_COOKIES_FILE)
         self.upload_file(local_path, self.REMOTE_COOKIES_FILE)
         logger.info("Cookies file deployed successfully")
 
@@ -486,5 +488,5 @@ def generate_ssh_keypair(
     with open(pub_path) as f:
         public_key = f.read().strip()
 
-    logger.info(f"Generated SSH keypair: {key_path}")
+    logger.info("Generated SSH keypair: %s", key_path)
     return str(key_path), public_key

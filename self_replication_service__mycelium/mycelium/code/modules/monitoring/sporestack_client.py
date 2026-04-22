@@ -3,14 +3,14 @@ SporeStack API client
 """
 
 import json
-import logging
 import time
 import urllib.request
 from typing import Optional
 
 from config import Config
+from utils import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 def get_info(token: str) -> Optional[dict]:

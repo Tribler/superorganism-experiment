@@ -5,13 +5,15 @@ Survives os._exit(42) restarts thanks to WAL mode with immediate commits.
 """
 
 import json
-import logging
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+from config import Config
+from utils import setup_logger
+
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 class NodePersistentState:

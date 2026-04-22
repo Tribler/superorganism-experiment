@@ -7,7 +7,6 @@ Periodically evaluates node financial state and decides:
 """
 
 import asyncio
-import logging
 from uuid import uuid4
 
 from ..spawning import deployer
@@ -18,11 +17,10 @@ from ..core import state as state_module
 from ..core import event_logger
 from . import topup
 from config import Config
+from utils import setup_logger
 from .spawn_thresholds import check_spawn_eligibility
 
-logger = logging.getLogger(__name__)
-
-_LOG_PREFIX = "[DECISION]"
+logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
 
 def _log(event_type: str, data: dict) -> None:
@@ -33,7 +31,7 @@ async def _wait_for_node_state(timeout: int = 300) -> None:
     """Poll until NodeMonitor has done at least one refresh (last_updated > 0)."""
     monitor = node_monitor.get_monitor()
     if monitor is None:
-        logger.warning("%s NodeMonitor not initialized, skipping wait", _LOG_PREFIX)
+        logger.warning("NodeMonitor not initialized, skipping wait")
         return
 
     elapsed = 0
@@ -44,8 +42,8 @@ async def _wait_for_node_state(timeout: int = 300) -> None:
         elapsed += 1
 
     logger.warning(
-        "%s Timed out waiting for NodeMonitor to complete first refresh (%ds)",
-        _LOG_PREFIX, timeout,
+        "Timed out waiting for NodeMonitor to complete first refresh (%ds)",
+        timeout,
     )
 
 
@@ -56,23 +54,23 @@ async def _handle_recovery() -> None:
         return
 
     if ps.is_spawn_in_progress():
-        logger.warning("%s Recovery: spawn was in progress", _LOG_PREFIX)
+        logger.warning("Recovery: spawn was in progress")
         await _wait_for_node_state()
         child_token = ps.get("spawn_child_token", "")
         monitor = node_monitor.get_monitor()
         if monitor is None:
-            logger.warning("%s NodeMonitor not available during spawn recovery", _LOG_PREFIX)
+            logger.warning("NodeMonitor not available during spawn recovery")
             return
         node_state = monitor.get_state()
         caution_trait = ps.get_caution_trait()
         await deployer.spawn_child(node_state, caution_trait, child_token)
 
     elif ps.is_failsafe_in_progress():
-        logger.warning("%s Recovery: failsafe was interrupted — retrying", _LOG_PREFIX)
+        logger.warning("Recovery: failsafe was interrupted — retrying")
         await _wait_for_node_state()
         monitor = node_monitor.get_monitor()
         if monitor is None:
-            logger.warning("%s NodeMonitor not available during failsafe recovery", _LOG_PREFIX)
+            logger.warning("NodeMonitor not available during failsafe recovery")
             return
         node_state = monitor.get_state()
         registry = peer_registry.get_registry()
@@ -80,7 +78,7 @@ async def _handle_recovery() -> None:
         try:
             await failsafe.execute_failsafe(node_state, live_peers)
         except Exception:
-            logger.exception("%s Failsafe recovery attempt failed — will retry on next restart", _LOG_PREFIX)
+            logger.exception("Failsafe recovery attempt failed — will retry on next restart")
 
 
 async def _tick() -> None:
@@ -90,20 +88,16 @@ async def _tick() -> None:
     registry = peer_registry.get_registry()
 
     if ps is None or monitor is None or registry is None:
-        logger.warning("%s Singletons not ready, skipping tick", _LOG_PREFIX)
+        logger.warning("Singletons not ready, skipping tick")
         return
 
     node_state = monitor.get_state()
     if node_state.last_updated == 0.0:
-        logger.warning(
-            "%s NodeMonitor has not completed first refresh, skipping tick", _LOG_PREFIX
-        )
+        logger.warning("NodeMonitor has not completed first refresh, skipping tick")
         return
 
     if node_state.days_remaining is None:
-        logger.warning(
-            "%s days_remaining unknown (SporeStack unreachable), skipping tick", _LOG_PREFIX
-        )
+        logger.warning("days_remaining unknown (SporeStack unreachable), skipping tick")
         return
 
     caution_trait = ps.get_caution_trait()
@@ -111,11 +105,11 @@ async def _tick() -> None:
 
     # Guard: pipeline already running
     if ps.is_spawn_in_progress():
-        logger.warning("%s Spawn already in progress, skipping tick", _LOG_PREFIX)
+        logger.warning("Spawn already in progress, skipping tick")
         return
 
     if ps.is_failsafe_in_progress():
-        logger.warning("%s Failsafe already in progress, skipping tick", _LOG_PREFIX)
+        logger.warning("Failsafe already in progress, skipping tick")
         return
 
     _log("decision_tick", {
@@ -128,8 +122,8 @@ async def _tick() -> None:
     # PRIORITY 1 — failsafe
     if node_state.days_remaining < Config.FAILSAFE_TRIGGER_DAYS:
         logger.critical(
-            "%s CRITICAL: runway %d days < failsafe threshold %d days — executing failsafe",
-            _LOG_PREFIX, node_state.days_remaining, Config.FAILSAFE_TRIGGER_DAYS,
+            "CRITICAL: runway %d days < failsafe threshold %d days — executing failsafe",
+            node_state.days_remaining, Config.FAILSAFE_TRIGGER_DAYS,
         )
         try:
             await failsafe.execute_failsafe(node_state, live_peers)
@@ -138,7 +132,7 @@ async def _tick() -> None:
                 "days_remaining": node_state.days_remaining,
             })
         except Exception as exc:
-            logger.exception("%s Failsafe failed — leaving flag set for recovery on restart", _LOG_PREFIX)
+            logger.exception("Failsafe failed — leaving flag set for recovery on restart")
             _log("decision_complete", {
                 "action": "failsafe", "success": False, "error": str(exc),
             })
@@ -147,8 +141,8 @@ async def _tick() -> None:
     # PRIORITY 2 — top up SporeStack balance
     if node_state.days_remaining < Config.TOPUP_TRIGGER_DAYS:
         logger.info(
-            "%s Runway %d days < topup threshold %d days — topping up SporeStack balance",
-            _LOG_PREFIX, node_state.days_remaining, Config.TOPUP_TRIGGER_DAYS,
+            "Runway %d days < topup threshold %d days — topping up SporeStack balance",
+            node_state.days_remaining, Config.TOPUP_TRIGGER_DAYS,
         )
         try:
             await topup.topup_sporestack(node_state)
@@ -168,8 +162,8 @@ async def _tick() -> None:
     if eligibility.eligible:
         child_token = f"child-{uuid4().hex[:8]}"
         logger.info(
-            "%s Spawn eligible — initiating spawn (token=%s, child_share=%d sat)",
-            _LOG_PREFIX, child_token, eligibility.child_share_sat,
+            "Spawn eligible — initiating spawn (token=%s, child_share=%d sat)",
+            child_token, eligibility.child_share_sat,
         )
         ps.mark_spawn_started(child_token)
         await deployer.spawn_child(node_state, caution_trait, child_token)
@@ -181,7 +175,7 @@ async def _tick() -> None:
         return
 
     # PRIORITY 4 — do nothing
-    logger.info("%s No action: %s", _LOG_PREFIX, eligibility.reason)
+    logger.info("No action: %s", eligibility.reason)
     _log("decision_complete", {
         "action": "none", "reason": eligibility.reason,
     })
@@ -189,9 +183,7 @@ async def _tick() -> None:
 
 async def run(running_ref) -> None:
     """Entry point called by the Orchestrator."""
-    logger.info(
-        "%s Decision loop starting (interval=%ds)", _LOG_PREFIX, Config.DECISION_INTERVAL
-    )
+    logger.info("Decision loop starting (interval=%ds)", Config.DECISION_INTERVAL)
     await _handle_recovery()
 
     while running_ref():

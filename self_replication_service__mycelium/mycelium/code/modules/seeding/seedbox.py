@@ -70,7 +70,7 @@ class Seedbox:
         torrent_file = Path(str(file_path) + ".torrent")
 
         if torrent_file.exists():
-            logger.debug(f"Torrent already exists: {torrent_file.name}")
+            logger.debug("Torrent already exists: %s", torrent_file.name)
             return torrent_file
 
 
@@ -87,7 +87,7 @@ class Seedbox:
         with open(torrent_file, "wb") as f:
             f.write(lt.bencode(torrent))
 
-        logger.info(f"Torrent created: {torrent_file.name}")
+        logger.info("Torrent created: %s", torrent_file.name)
         return torrent_file
 
     def _initialize_session(self) -> None:
@@ -99,7 +99,7 @@ class Seedbox:
         settings['listen_interfaces'] = f'0.0.0.0:{self.port_min}'
         self.session.apply_settings(settings)
 
-        logger.info(f"Session initialized on ports {self.port_min}-{self.port_max}")
+        logger.info("Session initialized on ports %d-%d", self.port_min, self.port_max)
 
     def _load_content_files(self) -> List[Path]:
         """
@@ -121,7 +121,7 @@ class Seedbox:
         if not files:
             raise SeedboxError(f"No files found in: {self.content_dir}")
 
-        logger.info(f"Found {len(files)} files to seed")
+        logger.info("Found %d files to seed", len(files))
         return files
 
     def _load_metadata(self, file_path: Path) -> Tuple[Optional[str], Optional[str]]:
@@ -144,7 +144,7 @@ class Seedbox:
             info_file = Path(str(file_path) + ".info.json")
 
         if not info_file.exists():
-            logger.debug(f"No metadata file found for: {file_path.name}")
+            logger.debug("No metadata file found for: %s", file_path.name)
             return None, None
 
         try:
@@ -154,11 +154,11 @@ class Seedbox:
             url = metadata.get('webpage_url') or metadata.get('original_url')
             license_info = metadata.get('license', 'Creative Commons')
 
-            logger.debug(f"Loaded metadata for {file_path.name}: url={url}")
+            logger.debug("Loaded metadata for %s: url=%s", file_path.name, url)
             return url, license_info
 
         except Exception as e:
-            logger.warning(f"Failed to load metadata for {file_path.name}: {e}")
+            logger.warning("Failed to load metadata for %s: %s", file_path.name, e)
             return None, None
 
     def _get_magnet_link(self, torrent_file: Path) -> str:
@@ -205,7 +205,7 @@ class Seedbox:
                 )
 
             except Exception as e:
-                logger.error(f"Failed to add {file_path.name}: {e}")
+                logger.error("Failed to add %s: %s", file_path.name, e)
 
     def get_content_for_broadcast(self) -> List[ContentInfo]:
         """
@@ -264,8 +264,8 @@ class Seedbox:
             SeedboxError: If initialization fails
         """
         logger.info("Initializing seedbox")
-        logger.info(f"Content directory: {self.content_dir}")
-        logger.info(f"Tracker: {self.tracker_url}")
+        logger.info("Content directory: %s", self.content_dir)
+        logger.info("Tracker: %s", self.tracker_url)
 
         self._initialize_session()
         files = self._load_content_files()
@@ -274,8 +274,8 @@ class Seedbox:
         if not self.handles:
             raise SeedboxError("No torrents loaded")
 
-        logger.info(f"Seedbox initialized with {len(self.handles)} torrents")
-        logger.info(f"Content registry has {len(self.content_registry)} entries")
+        logger.info("Seedbox initialized with %d torrents", len(self.handles))
+        logger.info("Content registry has %d entries", len(self.content_registry))
 
     def run_status_loop(self, status_interval: int = 180) -> None:
         """
@@ -284,15 +284,14 @@ class Seedbox:
         Args:
             status_interval: Seconds between status updates
         """
-        logger.info(f"Seeding {len(self.handles)} torrents")
+        logger.info("Seeding %d torrents", len(self.handles))
 
         try:
             while not self._stop_event.is_set():
                 status = self.get_status()
                 logger.info(
-                    f"Seeding: {status['torrents']} torrents, "
-                    f"{status['peers']} peers, "
-                    f"{status['uploaded'] / 1024 / 1024:.1f} MB uploaded"
+                    "Seeding: %d torrents, %d peers, %.1f MB uploaded",
+                    status['torrents'], status['peers'], status['uploaded'] / 1024 / 1024,
                 )
                 self._stop_event.wait(timeout=status_interval)
         except KeyboardInterrupt:
@@ -321,5 +320,5 @@ class Seedbox:
         except SeedboxError:
             raise
         except Exception as e:
-            logger.error(f"Seedbox error: {e}", exc_info=True)
+            logger.error("Seedbox error: %s", e, exc_info=True)
             raise SeedboxError(f"Seeding failed: {e}")
