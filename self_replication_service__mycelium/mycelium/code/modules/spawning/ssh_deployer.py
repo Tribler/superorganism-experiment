@@ -316,11 +316,7 @@ class SSHDeployer:
         branch: str = "main",
         subpath: Optional[str] = None
     ) -> None:
-        """Clone and set up mycelium repository using sparse checkout from monorepo.
-
-        The repo is cloned directly into REMOTE_BASE_DIR with sparse checkout,
-        keeping the git working tree intact so that 'git pull' works for auto-updates.
-        """
+        """Clone repo with sparse checkout into REMOTE_BASE_DIR, or pull if it exists."""
         repo_url = repo_url or self.MYCELIUM_REPO_URL
         subpath = subpath or self.MYCELIUM_SUBPATH
 
@@ -390,11 +386,7 @@ class SSHDeployer:
         env: Optional[Dict[str, str]] = None,
         secrets: Optional[Dict[str, str]] = None,
     ) -> None:
-        """Write secrets, set env vars (base + caller overrides), start the orchestrator wrapper.
-
-        `env` is merged on top of the base path env; `secrets` is a mapping of
-        remote_path -> content, each written via _write_secret_file (mode 600).
-        """
+        """Write secrets (mode 600), set env vars, and start the orchestrator wrapper."""
         logger.info("Starting orchestrator...")
 
         env_vars: Dict[str, str] = {

@@ -1,11 +1,4 @@
-"""
-Takes a funded ChildIdentity, asks the child's own SporeStack token to launch
-a VPS, waits until it has a reachable IP, and persists enough metadata for
-SSH deploy and future recovery
-
-On any failure, raises SpawnProvisionError; deployer.spawn_child catches it
-and leaves spawn_in_progress=True so the spawn retries
-"""
+"""Provisions a child VPS via SporeStack and persists connection metadata for SSH deploy."""
 
 import asyncio
 from dataclasses import dataclass

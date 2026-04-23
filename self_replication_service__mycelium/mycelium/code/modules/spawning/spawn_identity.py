@@ -1,15 +1,4 @@
-"""
-Child identity prep for the spawn pipeline (TODO 10.3).
-
-Produces everything a fresh child needs before we provision a VPS:
-  - per-spawn Ed25519 SSH keypair (public key baked into the VPS at launch)
-  - fresh BTC wallet (mnemonic for the child, address for the parent's inheritance)
-  - fresh SporeStack token (the child's API credential)
-  - ~TOPUP_TARGET_DAYS of runway paid onto that token from the parent's wallet
-
-On any failure, raises SpawnIdentityError; deployer.spawn_child catches it and
-leaves spawn_in_progress=True so the whole spawn retries from scratch on restart.
-"""
+"""Prepares child identity before VPS provisioning: SSH keypair, BTC wallet, SporeStack token + funding."""
 
 import asyncio
 import math
@@ -67,11 +56,7 @@ def _parse_bitcoin_uri(uri: str):
 
 
 def _generate_child_btc_wallet(child_token: str):
-    """Create a throwaway bitcoinlib wallet in an isolated DB; return (mnemonic, address).
-
-    The DB is deleted in a finally block so no private-key material survives
-    beyond this function — the returned mnemonic is the child's authoritative seed.
-    """
+    """Create throwaway bitcoinlib wallet in isolated DB; return (mnemonic, address). DB deleted in finally."""
     spawn_dir = Config.DATA_DIR / "spawn" / child_token
     spawn_dir.mkdir(parents=True, exist_ok=True)
     temp_db_path = spawn_dir / "child-wallet.db"
@@ -126,13 +111,7 @@ async def prepare_child_identity(
     child_token: str,
     node_state: NodeState,
 ) -> ChildIdentity:
-    """
-    Produce SSH keypair, BTC wallet, SporeStack token, and fund that token with
-    ~TOPUP_TARGET_DAYS of runway from the parent's wallet.
-
-    child_token is the local spawn ID (e.g. "child-a1b2c3d4") already generated
-    by decision_loop._tick — NOT a SporeStack token.
-    """
+    """Produce SSH keypair, BTC wallet, SporeStack token, and fund it from the parent's wallet."""
     logger.info("Preparing identity for %s", child_token)
 
     # 1) SSH keypair
