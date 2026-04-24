@@ -156,9 +156,12 @@ class RpcVerifier(BaseVerifier):
             addresses = script_pub_key["addresses"]
             if not isinstance(addresses, list):
                 raise ValueError("Invalid addresses in scriptPubKey.")
+
             for candidate in addresses:
                 if not isinstance(candidate, str):
                     raise ValueError("Invalid address entry in scriptPubKey addresses.")
+
+            for candidate in addresses:
                 candidate = candidate.strip()
                 if candidate:
                     return candidate
