@@ -87,17 +87,18 @@ async def _safe_disconnect(ssh_deployer) -> None:
         logger.warning("SSH disconnect raised: %s", e)
 
 
-async def spawn_child(node_state: NodeState, caution_trait: float, spawn_id: str) -> None:
-    """Run the full spawn pipeline. On failure, leave spawn_in_progress=True for retry.
+async def spawn_child(node_state: NodeState, caution_trait: float, spawn_id: str) -> bool:
+    """Run the full spawn pipeline. Returns True on success, False on failure.
 
-    Each durable side-effect (identity minting, VPS provisioning) persists its result to state.db
-    so a restart mid-pipeline can re-enter at the last successful step without re-spending money
+    On failure, leave spawn_in_progress=True for retry. Each durable side-effect
+    (identity minting, VPS provisioning) persists its result to state.db so a restart
+    mid-pipeline can re-enter at the last successful step without re-spending money
     on fresh SporeStack tokens or orphaning already-provisioned VPSes.
     """
     ps = state_module.get()
     if ps is None:
         logger.error("Persistent state unavailable — aborting spawn")
-        return
+        return False
 
     ssh_deployer = None
     logger.info("=== Spawn pipeline start: spawn_id=%s ===", spawn_id)
@@ -145,18 +146,21 @@ async def spawn_child(node_state: NodeState, caution_trait: float, spawn_id: str
             "=== Spawn complete: spawn_id=%s child_btc=%s txid=%s caution=%.3f ===",
             spawn_id, identity.btc_address, txid, child_caution,
         )
+        return True
     except SpawnError as e:
         logger.error(
             "Spawn pipeline failed at step=%s: spawn_id=%s — %s. "
             "spawn_in_progress=True preserved; will retry on next restart.",
             e.step, spawn_id, e,
         )
+        return False
     except Exception:
         logger.exception(
             "Unexpected error in spawn pipeline: spawn_id=%s. "
             "spawn_in_progress=True preserved; will retry on next restart.",
             spawn_id,
         )
+        return False
     finally:
         if ssh_deployer is not None:
             await _safe_disconnect(ssh_deployer)

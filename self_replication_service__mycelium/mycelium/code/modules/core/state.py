@@ -68,9 +68,30 @@ class NodePersistentState:
         return float(self.get("spawn_started_at", 0) or 0)
 
     def mark_spawn_started(self, spawn_id: str) -> None:
-        self.set("spawn_in_progress", True)
-        self.set("spawn_id", spawn_id)
-        self.set("spawn_started_at", time.time())
+        """Atomically set spawn_in_progress, spawn_id, and spawn_started_at.
+
+        A crash between individual writes could leave spawn_in_progress=True with
+        spawn_started_at=0, which would make _handle_shutdown's MAX_SPAWN_DURATION
+        check fire instantly on the next signal and abandon a healthy spawn.
+        """
+        try:
+            self._conn.execute("BEGIN IMMEDIATE")
+            self._conn.execute(
+                "INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)",
+                ("spawn_in_progress", json.dumps(True)),
+            )
+            self._conn.execute(
+                "INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)",
+                ("spawn_id", json.dumps(spawn_id)),
+            )
+            self._conn.execute(
+                "INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)",
+                ("spawn_started_at", json.dumps(time.time())),
+            )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
 
     # Keys written by the spawn pipeline that must be cleared on completion so
     # they don't leak into the next spawn. Kept in one list so adding a new

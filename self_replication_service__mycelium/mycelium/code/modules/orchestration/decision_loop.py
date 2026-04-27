@@ -171,9 +171,9 @@ async def _tick() -> None:
             spawn_id, eligibility.child_share_sat,
         )
         ps.mark_spawn_started(spawn_id)
-        await deployer.spawn_child(node_state, caution_trait, spawn_id)
+        success = await deployer.spawn_child(node_state, caution_trait, spawn_id)
         event_logger.get().log_event("decision_complete", {
-            "action": "spawn", "success": True,
+            "action": "spawn", "success": success,
             "spawn_id": spawn_id,
             "child_share_sat": eligibility.child_share_sat,
         })

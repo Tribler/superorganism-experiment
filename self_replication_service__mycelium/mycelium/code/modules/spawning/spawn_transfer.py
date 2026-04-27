@@ -8,81 +8,18 @@ the inheritance twice from different UTXOs.
 """
 
 import asyncio
-import time
-from typing import Optional
 
 from config import Config
 from utils import setup_logger
 from ..core import state as state_module
 from ..core import wallet as wallet_module
-from ..core.wallet import SpendingWallet
+from ..core.wallet import find_prior_send, _RECONCILE_POLL_TIMEOUT_SECONDS
 from ..monitoring.node_monitor import NodeState
 from ..orchestration.spawn_thresholds import compute_child_share
 from .errors import SpawnError
 from .spawn_identity import ChildIdentity
 
 logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
-
-# How long to keep re-querying the indexer before we accept "no prior tx exists"
-# on the resume path. Mempool propagation on signet/testnet can lag well beyond
-# the bitcoinlib transactions_update default; without this poll a freshly
-# broadcast inheritance tx that hasn't reached the indexer yet would be
-# re-broadcast, double-paying the inheritance.
-_RECONCILE_POLL_TIMEOUT_SECONDS = 90
-_RECONCILE_POLL_INTERVAL_SECONDS = 10
-
-
-def _scan_for_prior_send(
-    wallet: SpendingWallet,
-    child_btc_address: str,
-    amount_sat: int,
-) -> Optional[str]:
-    """One pass over bitcoinlib's stored transactions; returns matching outbound txid or None."""
-    try:
-        wallet._wallet.transactions_update()
-    except Exception as e:
-        logger.warning("transactions_update failed during reconcile: %s", e)
-
-    try:
-        txs = wallet._wallet.transactions_full()
-    except Exception as e:
-        logger.warning("transactions_full failed during reconcile: %s", e)
-        return None
-
-    for tx in txs or []:
-        if not getattr(tx, "is_send", True):
-            continue
-        outputs = getattr(tx, "outputs", None) or []
-        for out in outputs:
-            out_addr = getattr(out, "address", None)
-            out_value = getattr(out, "value", None)
-            if out_addr == child_btc_address and int(out_value or 0) == amount_sat:
-                txid = getattr(tx, "txid", None) or getattr(tx, "hash", None)
-                if txid:
-                    return txid
-    return None
-
-
-def _find_prior_send(
-    wallet: SpendingWallet,
-    child_btc_address: str,
-    amount_sat: int,
-) -> Optional[str]:
-    """Poll bitcoinlib's indexer for up to _RECONCILE_POLL_TIMEOUT_SECONDS for a matching outbound tx.
-
-    A just-broadcast tx may not be visible to the indexer for seconds-to-minutes;
-    a single scan that misses it would cause a double-broadcast. None means we
-    polled to timeout and still saw nothing — caller must treat as "unknown"
-    (do NOT re-broadcast blindly).
-    """
-    start = time.time()
-    while True:
-        txid = _scan_for_prior_send(wallet, child_btc_address, amount_sat)
-        if txid:
-            return txid
-        if time.time() - start >= _RECONCILE_POLL_TIMEOUT_SECONDS:
-            return None
-        time.sleep(_RECONCILE_POLL_INTERVAL_SECONDS)
 
 
 async def transfer_inheritance(
@@ -117,7 +54,7 @@ async def transfer_inheritance(
             child_share_sat, child_btc_address, _RECONCILE_POLL_TIMEOUT_SECONDS,
         )
         prior_txid = await asyncio.to_thread(
-            _find_prior_send, wallet, child_btc_address, child_share_sat,
+            find_prior_send, wallet, child_btc_address, child_share_sat,
         )
         if prior_txid:
             logger.info(

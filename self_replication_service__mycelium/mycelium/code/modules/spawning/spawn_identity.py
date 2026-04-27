@@ -20,7 +20,7 @@ from bitcoinlib.wallets import Wallet, wallet_delete
 from config import Config
 from utils import setup_logger
 from ..core import state as state_module
-from ..core.wallet import SpendingWallet, get_wallet, parse_bitcoin_uri
+from ..core.wallet import SpendingWallet, find_prior_send, get_wallet, parse_bitcoin_uri
 from ..monitoring import sporestack_client
 from ..monitoring.node_monitor import NodeState
 from .errors import SpawnError
@@ -230,8 +230,25 @@ async def _fund_sporestack_token(
     intent = ps.get("spawn_funding_intent")
     if intent and intent.get("spawn_id") == spawn_id and intent.get("sporestack_token") == sporestack_token:
         logger.info(
-            "Resume: spawn_funding_intent found — reconciling with SporeStack balance",
+            "Resume: spawn_funding_intent found — checking parent wallet history before SporeStack reconcile",
         )
+        # Check parent wallet history first: if the prior broadcast committed
+        # locally, SporeStack's get_balance may still report 0 cents for 10–60
+        # min while the tx confirms in mempool. Re-broadcasting in that window
+        # would double-fund the token from a different UTXO set.
+        prior_txid = await asyncio.to_thread(
+            find_prior_send,
+            wallet,
+            intent["pay_address"],
+            int(intent["amount_sat"]),
+        )
+        if prior_txid:
+            logger.info(
+                "Resume: parent wallet shows matching outbound tx %s — treating prior broadcast as committed",
+                prior_txid,
+            )
+            ps.set("spawn_funding_txid", prior_txid)
+            return
         balance = await asyncio.to_thread(sporestack_client.get_balance, sporestack_token)
         if balance and int(balance.get("cents", 0)) > 0:
             logger.info(
