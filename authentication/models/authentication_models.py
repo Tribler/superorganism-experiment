@@ -6,6 +6,19 @@ from datetime import datetime, timedelta, timezone
 from authentication.constants import AUTHENTICATION_CHALLENGE_TTL_SECONDS
 
 
+@dataclass(frozen=True)
+class VerifyRequest:
+    public_key_hex: str
+    txid: str
+    signature: bytes
+
+
+@dataclass(frozen=True)
+class AuthenticationResult:
+    success: bool
+    reason: str | None = None
+
+
 @dataclass
 class StoredChallenge:
     """Stored authentication challenge together with its public key and issuance time."""
@@ -24,4 +37,5 @@ class StoredChallenge:
         :returns: True if the challenge has expired, otherwise False.
         """
         return datetime.now(timezone.utc) > self.issued_at + timedelta(
-            seconds=AUTHENTICATION_CHALLENGE_TTL_SECONDS)
+            seconds=AUTHENTICATION_CHALLENGE_TTL_SECONDS
+        )
