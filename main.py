@@ -20,6 +20,7 @@ from democracy.storage.json_store import JSONStore
 from healthchecker.db import init_db
 from healthchecker.health_thread import TorrentHealthThread
 from ui.app import Application
+from ui.common.fonts import load_application_fonts
 
 # -----------------------------
 # App entrypoint
@@ -57,6 +58,7 @@ def main() -> None:
 
     # --- UI creation (main thread) ---
     app = QApplication(sys.argv)
+    load_application_fonts()
 
     # --- Torrent health ---
     init_db()

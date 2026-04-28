@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QIcon
 
-import resources_rc
+from ui.resources import resources_rc  # noqa: F401 - registers compiled Qt resources
 
 
 def icon(name: str) -> QIcon:

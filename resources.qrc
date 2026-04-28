@@ -1,9 +1,0 @@
-<RCC>
-  <qresource prefix="/icons">
-    <file alias="bolt.svg">resources/icons/bolt.svg</file>
-    <file alias="arrow-up-right.svg">resources/icons/arrow-up-right.svg</file>
-  </qresource>
-  <qresource prefix="/images">
-    <file alias="landing_page.png">resources/images/landing_page.png</file>
-  </qresource>
-</RCC>

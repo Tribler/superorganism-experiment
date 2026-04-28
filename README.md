@@ -39,11 +39,93 @@ other ideas: Bounties, seedbox fleet? status of IPv8 network? Money in system, a
 
 ## General
 
-All resources are listed in the [resources/](resources/) directory, including icons, datasets, and other assets. They must be converted using the PySide6 resource compiler. Run the following command after adding new resources:
+Qt UI resources are listed in the [ui/resources/](ui/resources/) directory, including icons, fonts, images, and the resource manifest. They must be converted using the PySide6 resource compiler. Run the following command after adding new UI resources:
 
 ```bash
-pyside6-rcc resources.qrc -o resources_rc.py
+pyside6-rcc ui/resources/resources.qrc -o ui/resources/resources_rc.py
 ```
+
+## Local Bitcoin regtest environment
+
+This project uses a local **Bitcoin Core regtest node** for development and integration testing. Regtest is a private blockchain intended for testing. It does not connect to mainnet, and blocks can be mined on demand.
+
+The script `scripts/regtest.sh` automates the local setup by:
+
+- creating a dedicated regtest data directory inside the project
+- generating a bitcoin.conf
+- starting bitcoind
+- creating or loading a wallet
+- mining initial blocks so the wallet has spendable funds
+- exposing simple commands for status, reset, mining, and demo transactions
+
+### Dependencies
+
+The script requires:
+
+- bash
+- bitcoind (part of **Bitcoin Core**)
+- bitcoin-cli (part of **Bitcoin Core**)
+- jq (for JSON parsing)
+
+### Installing dependencies
+
+#### macOS
+
+```bash
+brew install bitcoin
+```
+
+```bash
+brew install jq
+```
+
+### Project-local data directory
+
+The script stores all regtest data inside the repository:
+
+```aiignore
+.bitcoin/regtest-demo/
+```
+
+### Configuration
+
+The script supports a few environment variables, but all have sensible defaults.
+
+| Variable         | Default                   | Description                      |
+|------------------|---------------------------|----------------------------------|
+| `BITCOIND_BIN`   | `bitcoind`                | Path to the `bitcoind` binary    |
+| `BITCOINCLI_BIN` | `bitcoin-cli`             | Path to the `bitcoin-cli` binary |
+| `DATA_DIR`       | `./.bitcoin/regtest-demo` | Regtest data directory           |
+| `WALLET_NAME`    | `demo`                    | Wallet name used for testing     |
+| `RPC_USER`       | `demo`                    | RPC username                     |
+| `RPC_PASSWORD`   | `superorganism`           | RPC password                     |
+| `RPC_PORT`       | `18443`                   | Regtest RPC port                 |
+| `P2P_PORT`       | `18444`                   | Regtest P2P port                 |
+| `HOST`           | `127.0.0.1`               | Host interface for the node      |
+
+### Usage
+
+The script supports the following commands:
+
+```bash
+scripts/regtest.sh start
+scripts/regtest.sh stop
+scripts/regtest.sh reset
+scripts/regtest.sh status
+scripts/regtest.sh mine [n]
+scripts/regtest.sh send <address> [amount] [op_return_hex]
+scripts/regtest.sh treasury-address
+```
+
+| Command            | Description                                                                                                                                                                                                                                                    |
+|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `start`            | Starts the regtest node, creates the config file if needed, loads or creates the wallet, and ensures the wallet is funded. On first startup, the script mines 101 blocks. This is necessary because coinbase rewards must mature before they become spendable. |
+| `stop`             | Stops the running regtest node.                                                                                                                                                                                                                                |
+| `reset`            | Deletes the local regtest blockchain and wallet state, then starts from a clean environment. This is useful for repeatable integration tests.                                                                                                                  |
+| `status`           | Prints basic blockchain and wallet state.                                                                                                                                                                                                                      |
+| `mine`             | Mines one or more new regtest blocks. This is especially useful for confirming transactions during testing.                                                                                                                                                    |
+| `send`             | Sends a demo transaction from the local wallet.                                                                                                                                                                                                                |
+| `treasury-address` | Prints the address of the treasury. This is useful for funding the wallet from external tools or for testing incoming transactions.                                                                                                                            |
 
 ## Mycelium
 
@@ -248,4 +330,3 @@ python analysis/plot.py data/events.csv -o data/plots
 ```
 
 ## Democracy
-

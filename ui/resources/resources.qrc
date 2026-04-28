@@ -1,0 +1,16 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="arrow-up-right.svg">icons/arrow-up-right.svg</file>
+    <file alias="bolt.svg">icons/bolt.svg</file>
+    <file alias="clock.svg">icons/clock.svg</file>
+    <file alias="document-duplicate.svg">icons/document-duplicate.svg</file>
+    <file alias="fingerprint.svg">icons/fingerprint.svg</file>
+  </qresource>
+  <qresource prefix="/images">
+    <file alias="landing_page.png">images/landing_page.png</file>
+  </qresource>
+  <qresource prefix="/fonts/inter">
+    <file alias="Inter-VariableFont_opsz,wght.ttf">fonts/inter/Inter-VariableFont_opsz,wght.ttf</file>
+    <file alias="Inter-Italic-VariableFont_opsz,wght.ttf">fonts/inter/Inter-Italic-VariableFont_opsz,wght.ttf</file>
+  </qresource>
+</RCC>

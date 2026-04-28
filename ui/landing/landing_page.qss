@@ -331,3 +331,343 @@ QLabel#footerRights {
     font-weight: 700;
     letter-spacing: 1.2px;
 }
+
+/* =========================================================
+   JOIN MESH OVERLAY
+========================================================= */
+
+QWidget#joinMeshOverlay {
+    background-color: transparent;
+}
+
+QFrame#joinMeshCard {
+    background-color: rgba(18, 18, 20, 0.96);
+    border: 1px solid rgba(182, 160, 255, 0.10);
+    border-radius: 18px;
+}
+
+QFrame#joinMeshCard[glow="true"] {
+    border: 1px solid rgba(182, 160, 255, 0.18);
+}
+
+QFrame[role="join-mesh-icon-wrap"] {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: none;
+    border-radius: 14px;
+}
+
+QLabel[role="join-mesh-icon"],
+QToolButton[role="join-mesh-icon"] {
+    background-color: transparent;
+    border: none;
+    color: #b6a0ff;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 0;
+}
+
+QLabel[role="join-mesh-title"] {
+    color: #fafafa;
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+}
+
+QLabel[role="join-mesh-subtitle"] {
+    color: #a8a8ad;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.65;
+    min-width: 474px;
+    max-width: 474px;
+}
+
+QFrame[role="payment-address-card"] {
+    background-color: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+}
+
+QLabel[role="payment-address-label"] {
+    color: #b3b3b8;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.8px;
+}
+
+QLabel[role="payment-address-value"] {
+    color: #b6a0ff;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+QLabel[role="join-mesh-field-label"] {
+    color: #e5e7eb;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QLineEdit[variant="join-mesh-input"] {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    min-height: 22px;
+    padding: 14px 16px;
+    color: #f5f5f5;
+    font-size: 13px;
+    selection-background-color: rgba(182, 160, 255, 0.28);
+}
+
+QLineEdit[variant="join-mesh-input"]:focus {
+    border: 1px solid rgba(182, 160, 255, 0.45);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+QLineEdit[variant="join-mesh-input"]::placeholder {
+    color: #7a7a80;
+}
+
+QLabel[role="join-mesh-pill"] {
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+QLabel[role="join-mesh-pill"][tone="danger"] {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #b7b7bc;
+}
+
+QLabel[role="join-mesh-pill"][tone="neutral"] {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #b7b7bc;
+}
+
+QPushButton[variant="join-mesh-primary"] {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #7b4dff,
+        stop:1 #bba6ff
+    );
+    color: #34136c;
+    border: none;
+    border-radius: 10px;
+    padding: 16px 22px;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+QPushButton[variant="join-mesh-primary"]:hover {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #8c63ff,
+        stop:1 #c6b2ff
+    );
+}
+
+QPushButton[variant="join-mesh-secondary"] {
+    background-color: transparent;
+    color: #c3c3c8;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 16px 26px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+QPushButton[variant="join-mesh-secondary"]:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: #f3f4f6;
+}
+
+QPushButton[variant="icon-square"] {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #f4f4f5;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 0;
+}
+
+QPushButton[variant="icon-square"]:hover {
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+QFrame[role="join-mesh-footer-line"] {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: none;
+}
+
+QLabel[role="join-mesh-footer-meta"] {
+    color: #7f7f85;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+/* =========================================================
+   VERIFY COMMITMENT OVERLAY
+========================================================= */
+
+QWidget#verifyCommitmentOverlay {
+    background-color: transparent;
+}
+
+QFrame#verifyCommitmentCard {
+    background-color: rgba(18, 18, 20, 0.96);
+    border: 1px solid rgba(182, 160, 255, 0.08);
+    border-radius: 18px;
+}
+
+QFrame[role="verify-progress-track"] {
+    background-color: #050505;
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+QFrame[role="verify-progress-fill"] {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #7b4dff,
+        stop:1 #bba6ff
+    );
+    border-top-left-radius: 18px;
+    border-top-right-radius: 0;
+}
+
+QFrame[role="verify-commitment-icon-wrap"] {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: none;
+    border-radius: 14px;
+}
+
+QLabel[role="verify-commitment-icon"] {
+    color: #b6a0ff;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel[role="verify-commitment-title"] {
+    color: #fafafa;
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+}
+
+QLabel[role="verify-commitment-subtitle"] {
+    color: #a8a8ad;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.65;
+    max-width: 500px;
+}
+
+QLabel[role="verify-section-label"] {
+    color: #b3b3b8;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.8px;
+}
+
+QPushButton[variant="inline-copy"] {
+    background-color: transparent;
+    border: none;
+    color: #c4b5fd;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+}
+
+QPushButton[variant="inline-copy"]:hover {
+    color: #ddd6fe;
+}
+
+QFrame[role="verify-message-card"] {
+    background-color: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+}
+
+QLabel[role="verify-message-value"] {
+    color: #8f75ff;
+    font-size: 15px;
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1.8;
+}
+
+QTextEdit[variant="verify-signature-input"] {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    padding: 16px 16px;
+    color: #f5f5f5;
+    font-size: 13px;
+    selection-background-color: rgba(182, 160, 255, 0.28);
+}
+
+QTextEdit[variant="verify-signature-input"]:focus {
+    border: 1px solid rgba(182, 160, 255, 0.45);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+QTextEdit[variant="verify-signature-input"]::placeholder {
+    color: #7a7a80;
+}
+
+QLabel[role="verify-status-pill"] {
+    border-radius: 12px;
+    padding: 9px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+QLabel[role="verify-status-pill"][tone="neutral"] {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #b7b7bc;
+}
+
+QPushButton[variant="verify-primary"] {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #7b4dff,
+        stop:1 #bba6ff
+    );
+    color: #34136c;
+    border: none;
+    border-radius: 10px;
+    padding: 16px 22px;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+QPushButton[variant="verify-primary"]:hover {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #8c63ff,
+        stop:1 #c6b2ff
+    );
+}
+
+QPushButton[variant="verify-secondary"] {
+    background-color: transparent;
+    color: #d4d4d8;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 16px 26px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+QPushButton[variant="verify-secondary"]:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: #f4f4f5;
+}
