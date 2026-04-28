@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QWidget,
@@ -13,13 +13,29 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QToolButton,
+    QMessageBox,
 )
 
+from authentication.bitcoin.txid import validate_txid
+from authentication.identity.ed25519_identity_generator import (
+    Ed25519IdentityGenerator,
+    IdentityGenerator,
+)
+from authentication.models.authentication_models import VerifyRequest
+from authentication.identity.models import ApplicationIdentity
+from authentication.services.authentication_service import AuthenticationService
+from authentication.services.registration_service import RegistrationService
+from authentication.storage.registration_store import RegistrationStore
 from ui.common.icons import icon, icon_size
-from ui.constants import WHITEPAPER_URL
+from ui.constants import JOIN_MESH_EXPECTED_FEE_SATS, TREASURY_ADDRESS, WHITEPAPER_URL
+from ui.landing.join_mesh_overlay import JoinMeshOverlay
+from ui.landing.login_overlay import LoginOverlay
 
 
 class LandingNavBar(QWidget):
+    join_requested = Signal()
+    sign_in_requested = Signal()
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("landingNavBar")
@@ -35,13 +51,13 @@ class LandingNavBar(QWidget):
         self.sign_in_btn = QPushButton("Sign In")
         self.sign_in_btn.setProperty("variant", "landing-nav-link")
         self.sign_in_btn.setFixedHeight(40)
-        self.sign_in_btn.clicked.connect(lambda: print("Sign In clicked"))
+        self.sign_in_btn.clicked.connect(lambda _checked=False: self.sign_in_requested.emit())
 
         self.join_btn = QPushButton("Join Mesh")
         self.join_btn.setObjectName("navJoinButton")
         self.join_btn.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.join_btn.setFixedHeight(44)
-        self.join_btn.clicked.connect(lambda: print("Join Mesh clicked"))
+        self.join_btn.clicked.connect(lambda _checked=False: self.join_requested.emit())
 
         layout.addWidget(self.brand_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addStretch()
@@ -50,6 +66,8 @@ class LandingNavBar(QWidget):
 
 
 class HeroSection(QFrame):
+    join_requested = Signal()
+
     def __init__(self, image_path: str | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("heroSection")
@@ -85,7 +103,7 @@ class HeroSection(QFrame):
         self.title_lbl = QLabel(
             """
             <p align="center" style="line-height: 0.85; margin: 0;">
-                The World\'s First<br>
+                The World's First<br>
                 <span style="color:#b6a0ff;">Autonomous<br>Seedbox.</span>
             </p>
             """
@@ -120,7 +138,7 @@ class HeroSection(QFrame):
         self.join_btn.setIcon(icon("bolt"))
         self.join_btn.setIconSize(icon_size(18))
         self.join_btn.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.join_btn.clicked.connect(lambda: print("Hero Join the Mesh clicked"))
+        self.join_btn.clicked.connect(lambda _checked=False: self.join_requested.emit())
 
         self.whitepaper_btn = QPushButton(f"View Whitepaper{icon_gap}")
         self.whitepaper_btn.setProperty("variant", "landing-secondary-hero")
@@ -263,14 +281,14 @@ class PricingCard(QFrame):
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(10)
 
-            icon = QLabel("●")
-            icon.setObjectName("featureBullet")
+            icon_lbl = QLabel("●")
+            icon_lbl.setObjectName("featureBullet")
 
             text = QLabel(feature)
             text.setObjectName("featureText")
             text.setWordWrap(True)
 
-            row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
+            row.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignTop)
             row.addWidget(text, 1)
             features_layout.addLayout(row)
 
@@ -364,9 +382,32 @@ class FooterSection(QFrame):
 
 
 class LandingPageWidget(QWidget):
-    def __init__(self, hero_image_path: str | None = None, parent: QWidget | None = None):
+    _LOGIN_COMMITMENT_PLACEHOLDER = "Enter or load a public key to create a login challenge."
+
+    def __init__(
+        self,
+        registration_service: RegistrationService,
+        registration_store: RegistrationStore,
+        authentication_service: AuthenticationService,
+        hero_image_path: str | None = None,
+        parent: QWidget | None = None,
+        payment_address: str = TREASURY_ADDRESS,
+        expected_fee_sats: int = JOIN_MESH_EXPECTED_FEE_SATS,
+    ):
         super().__init__(parent)
         self.setObjectName("landingPageRoot")
+
+        self._registration_service = registration_service
+        self._registration_store = registration_store
+        self._authentication_service = authentication_service
+        self._payment_address = payment_address
+        self._expected_fee_sats = expected_fee_sats
+
+        self._identity_generator: IdentityGenerator = Ed25519IdentityGenerator()
+        # Hold the generated identity until the user submits a txid
+        self._pending_identity: ApplicationIdentity | None = None
+        self.join_mesh_overlay: JoinMeshOverlay | None = None
+        self.login_overlay: LoginOverlay | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -384,9 +425,12 @@ class LandingPageWidget(QWidget):
 
         self.nav = LandingNavBar(self)
         self.nav.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.nav.join_requested.connect(self._open_join_mesh_overlay)
+        self.nav.sign_in_requested.connect(self._open_login_overlay)
         self.nav.raise_()
 
-        self.hero = HeroSection(image_path=":/images/landing_page.png")
+        self.hero = HeroSection(image_path=hero_image_path or ":/images/landing_page.png")
+        self.hero.join_requested.connect(self._open_join_mesh_overlay)
 
         content_layout.addWidget(self.hero)
 
@@ -501,3 +545,276 @@ class LandingPageWidget(QWidget):
         super().resizeEvent(event)
         self.nav.setGeometry(0, 0, self.width(), 88)
         self.nav.raise_()
+
+        if self.join_mesh_overlay is not None and self.join_mesh_overlay.isVisible():
+            self.join_mesh_overlay.raise_()
+
+        if self.login_overlay is not None and self.login_overlay.isVisible():
+            self.login_overlay.raise_()
+
+    def _open_login_overlay(self) -> None:
+        if self.login_overlay is None:
+            self.login_overlay = LoginOverlay(parent=self)
+            self.login_overlay.public_key_committed.connect(self._refresh_login_challenge)
+            self.login_overlay.load_saved_login_requested.connect(self._load_saved_login)
+            self.login_overlay.sign_now_requested.connect(self._sign_message)
+            self.login_overlay.login_requested.connect(self._handle_login_request)
+
+        current_public_key_hex = self.login_overlay.public_key()
+        if current_public_key_hex:
+            self._refresh_login_challenge(current_public_key_hex)
+        else:
+            self.login_overlay.set_commitment(self._LOGIN_COMMITMENT_PLACEHOLDER)
+
+        self.login_overlay.open_overlay()
+
+    @Slot(str)
+    def _refresh_login_challenge(self, public_key_hex: str) -> None:
+        if self.login_overlay is None:
+            return
+
+        normalized_public_key_hex = self._normalize_hex(public_key_hex)
+        if not normalized_public_key_hex:
+            self.login_overlay.set_commitment(self._LOGIN_COMMITMENT_PLACEHOLDER)
+            return
+
+        try:
+            challenge = self._authentication_service.create_challenge_message(normalized_public_key_hex)
+        except ValueError:
+            self.login_overlay.set_commitment(self._LOGIN_COMMITMENT_PLACEHOLDER)
+            return
+
+        self.login_overlay.set_commitment(challenge)
+
+    @Slot(str)
+    def _load_saved_login(self, public_key_hex: str) -> None:
+        if self.login_overlay is None:
+            return
+
+        normalized_public_key_hex = self._normalize_hex(public_key_hex)
+        if not normalized_public_key_hex:
+            QMessageBox.warning(
+                self,
+                "Saved login",
+                "Enter a public key to load saved login credentials.",
+            )
+            return
+
+        stored_registration = self._registration_store.get(
+            normalized_public_key_hex
+        )
+        if stored_registration is None:
+            QMessageBox.warning(
+                self,
+                "Saved login",
+                f"No saved login found for public key '{normalized_public_key_hex}'.",
+            )
+            return
+
+        self.login_overlay.set_credentials(
+            public_key=stored_registration.public_key_hex,
+            txid=stored_registration.txid,
+            private_key=stored_registration.private_key_hex,
+        )
+
+    def _sign_message(self) -> None:
+        if self.login_overlay is None:
+            return
+
+        public_key_hex = self.login_overlay.public_key().strip()
+        private_key_hex = self.login_overlay.private_key().strip()
+
+        if not public_key_hex:
+            QMessageBox.warning(
+                self,
+                "Login signature",
+                "Enter a public key before signing the login challenge.",
+            )
+            return
+
+        if not private_key_hex:
+            QMessageBox.warning(
+                self,
+                "Login signature",
+                "Enter a private key before signing the login challenge.",
+            )
+            return
+
+        try:
+            signature = self._authentication_service.sign_outstanding_challenge(
+                public_key_hex=public_key_hex,
+                private_key_hex=private_key_hex,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "Login signature", str(exc))
+            return
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Login signature",
+                f"Failed to sign login challenge: {exc}",
+            )
+            return
+
+        self.login_overlay.set_signature(signature.hex())
+
+    def _open_join_mesh_overlay(self) -> None:
+        identity = self._identity_generator.generate_identity()
+        self._pending_identity = identity
+
+        if self.join_mesh_overlay is None:
+            self.join_mesh_overlay = JoinMeshOverlay(parent=self)
+            self.join_mesh_overlay.create_account_requested.connect(
+                self.on_registration_txid_submitted
+            )
+
+        self.join_mesh_overlay.set_payment_address(self._payment_address)
+        self.join_mesh_overlay.set_public_key(identity.public_key_hex)
+        self.join_mesh_overlay.set_commitment(identity.registration_commitment_hex)
+        self.join_mesh_overlay.open_overlay()
+
+    @Slot(str)
+    def on_registration_txid_submitted(self, txid: str) -> None:
+        identity = self._pending_identity
+        if identity is None:
+            return
+
+        result = self._registration_service.register(identity, txid)
+
+        if not result.success:
+            self.show_error(result.reason or "Registration failed.")
+            return
+
+        self.show_credentials_dialog(
+            public_key_hex=identity.public_key_hex,
+            private_key_hex=identity.private_key_hex,
+            txid=txid,
+        )
+
+        if self.join_mesh_overlay is not None:
+            self.join_mesh_overlay.close_overlay()
+
+        self._pending_identity = None
+
+    def show_error(self, message: str) -> None:
+        QMessageBox.critical(self, "Registration failed", message)
+
+    def show_credentials_dialog(
+        self,
+        public_key_hex: str,
+        private_key_hex: str,
+        txid: str,
+    ) -> None:
+        QMessageBox.information(
+            self,
+            "Account created",
+            (
+                "Your account was created successfully.\n\n"
+                f"Public key:\n{public_key_hex}\n\n"
+                f"Private key:\n{private_key_hex}\n\n"
+                f"Transaction ID:\n{txid}\n\n"
+                "Save these credentials securely. The private key is required to authenticate on other devices."
+            ),
+        )
+
+    @Slot(str, str, str)
+    def _handle_login_request(
+        self,
+        public_key_hex: str,
+        txid: str,
+        signature_hex: str,
+    ) -> None:
+        normalized_public_key_hex = self._normalize_hex(public_key_hex)
+        normalized_txid = txid.strip()
+        normalized_signature_hex = self._normalize_hex(signature_hex)
+
+        validation_error = self._validate_login_inputs(
+            public_key_hex=normalized_public_key_hex,
+            txid=normalized_txid,
+            signature_hex=normalized_signature_hex,
+        )
+        if validation_error is not None:
+            QMessageBox.warning(self, "Login failed", validation_error)
+            return
+
+        try:
+            signature_bytes = bytes.fromhex(normalized_signature_hex)
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Login failed",
+                "Signature must be valid hexadecimal.",
+            )
+            return
+
+        result = self._authentication_service.verify_login(
+            VerifyRequest(
+                public_key_hex=normalized_public_key_hex,
+                txid=normalized_txid,
+                signature=signature_bytes,
+            )
+        )
+
+        if not result.success:
+            QMessageBox.warning(
+                self,
+                "Login failed",
+                result.reason or "Authentication failed.",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Login successful",
+            f"Successfully authenticated as '{normalized_public_key_hex}'.",
+        )
+
+        if self.login_overlay is not None:
+            self.login_overlay.close_overlay()
+
+    def _validate_login_inputs(
+        self,
+        *,
+        public_key_hex: str,
+        txid: str,
+        signature_hex: str,
+    ) -> str | None:
+        if not public_key_hex:
+            return "Enter a public key."
+
+        if not txid:
+            return "Enter a transaction ID."
+
+        try:
+            validate_txid(txid)
+        except ValueError:
+            return "Transaction ID must be a 64-character hexadecimal string."
+
+        if not signature_hex:
+            return "Enter a signature."
+
+        if not self._is_hex(public_key_hex):
+            return "Public key must be valid hexadecimal."
+
+        if not self._is_hex(signature_hex):
+            return "Signature must be valid hexadecimal."
+
+        return None
+
+    @staticmethod
+    def _normalize_hex(value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized.startswith("0x"):
+            normalized = normalized[2:]
+        return normalized
+
+    @staticmethod
+    def _is_hex(value: str) -> bool:
+        if not value:
+            return False
+
+        try:
+            bytes.fromhex(value)
+            return True
+        except ValueError:
+            return False

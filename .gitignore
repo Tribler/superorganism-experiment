@@ -334,3 +334,6 @@ democracy/data/
 
 # Bitcoin regtest data
 .bitcoin/
+
+# Accounts
+.superorganism/
