@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from typing import TYPE_CHECKING, Callable, Optional
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget
 
 from config import UI_REFRESH_DELAY
-from democracy.models.issue import Issue
-from democracy.models.issue_vote import IssueVote
+from democracy.democracy_service import DemocracyService
 from democracy.models.person import Person
-from democracy.models.solution import Solution
-from democracy.models.solution_vote import SolutionVote
-from democracy.storage.democracy_reposiory import DemocracyRepository
-from democracy.storage.json_store import JSONStore
 from ui.models.issue_draft import IssueDraft
 from ui.models.solution_draft import SolutionDraft
 from ui.widgets.create_issue_overlay import CreateIssueOverlay
@@ -47,41 +42,21 @@ class Application(QMainWindow):
     6. Data loading and refreshing.
 
     Args:
-        issue_store (JSONStore[Issue]): Store for issues.
-        issue_vote_store (JSONStore[Vote]): Store for votes.
+        user (Person): Current session user.
+        democracy_service (DemocracyService): Application-facing democracy service.
     """
 
     def __init__(
         self,
         user: Person,
-        issue_store: JSONStore[Issue],
-        issue_vote_store: JSONStore[IssueVote],
-        solution_store: JSONStore[Solution],
-        solution_vote_store: JSONStore[SolutionVote],
-        broadcast_new_issue: Callable[[Issue], None],
-        broadcast_new_issue_vote: Callable[[IssueVote], None],
-        broadcast_new_solution: Callable[[Solution], None],
-        broadcast_new_solution_vote: Callable[[SolutionVote], None],
+        democracy_service: DemocracyService,
         health_thread: TorrentHealthThread,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
 
         self.user = user
-
-        self.issue_store = issue_store
-        self.issue_vote_store = issue_vote_store
-        self.solution_store = solution_store
-        self.solution_vote_store = solution_vote_store
-
-        self.repo = DemocracyRepository(
-            issue_store, issue_vote_store, solution_store, solution_vote_store
-        )
-
-        self.broadcast_new_issue = broadcast_new_issue
-        self.broadcast_new_issue_vote = broadcast_new_issue_vote
-        self.broadcast_new_solution = broadcast_new_solution
-        self.broadcast_new_solution_vote = broadcast_new_solution_vote
+        self.democracy_service = democracy_service
 
         self._health_thread = health_thread
 
@@ -200,13 +175,15 @@ class Application(QMainWindow):
         """
         Immediate refresh (useful for local UI actions).
         """
-        self.issues_page.load(self.repo.get_all_issues_with_votes())
+        self.issues_page.load(self.democracy_service.get_all_issues_with_votes())
 
         current_id = self.issue_detail_page.current_issue_id
         if current_id:
-            issue = self.repo.get_issue_with_votes(current_id)
+            issue = self.democracy_service.get_issue_with_votes(current_id)
             if issue:
-                solutions = self.repo.get_solutions_for_issue_with_votes(current_id)
+                solutions = self.democracy_service.get_solutions_for_issue_with_votes(
+                    current_id
+                )
                 self.issue_detail_page.show_issue(issue, solutions)
 
     def schedule_refresh(self) -> None:
@@ -249,15 +226,12 @@ class Application(QMainWindow):
         if errors:
             return
 
-        issue = Issue(
+        self.democracy_service.create_issue(
             title=draft.title,
             description=draft.description,
             creator_id=self.user.id,
         )
-
-        self.issue_store.add(issue)
         self.refresh()
-        self.broadcast_new_issue(issue)
 
     def _on_select(self, issue_id: UUID):
         """
@@ -279,33 +253,21 @@ class Application(QMainWindow):
         :param issue_id: ID of the selected issue.
         :return: None
         """
-        if self.repo.has_user_voted_for_issue(self.user.id, issue_id):
+        vote = self.democracy_service.vote_for_issue(self.user.id, issue_id)
+        if vote is None:
             return  # already voted
 
-        vote = IssueVote(
-            voter_id=self.user.id,
-            issue_id=issue_id,
-        )
-        self.issue_vote_store.add(vote)
-
         self.refresh()
-        self.broadcast_new_issue_vote(vote)
 
-    def _on_solution_vote(self, issue_id: UUID, solution_id: UUID) -> None:
-        if self.repo.has_user_voted_for_solution(self.user.id, solution_id):
+    def _on_solution_vote(self, _issue_id: UUID, solution_id: UUID) -> None:
+        vote = self.democracy_service.vote_for_solution(self.user.id, solution_id)
+        if vote is None:
             return
 
-        vote = SolutionVote(
-            voter_id=self.user.id,
-            solution_id=solution_id,
-        )
-        self.solution_vote_store.add(vote)
-
         self.refresh()
-        self.broadcast_new_solution_vote(vote)
 
     def _on_solution_details(self, issue_id: UUID, solution_id: UUID) -> None:
-        solution = self.repo.get_solution_with_votes(solution_id)
+        solution = self.democracy_service.get_solution_with_votes(solution_id)
         if not solution:
             return
 
@@ -321,11 +283,11 @@ class Application(QMainWindow):
         self.content_stack.setCurrentWidget(self.issues_page)
 
     def _show_issue_detail_page(self, issue_id: UUID) -> None:
-        issue = self.repo.get_issue_with_votes(issue_id)
+        issue = self.democracy_service.get_issue_with_votes(issue_id)
         if not issue:
             return
 
-        solutions = self.repo.get_solutions_for_issue_with_votes(issue_id)
+        solutions = self.democracy_service.get_solutions_for_issue_with_votes(issue_id)
 
         self.issue_detail_page.show_issue(
             issue,
@@ -346,16 +308,13 @@ class Application(QMainWindow):
         if errors:
             return
 
-        solution = Solution(
+        self.democracy_service.create_solution(
             title=draft.title,
             description=draft.description,
             creator_id=self.user.id,
             issue_id=self._solution_target_issue_id,
         )
-
-        self.solution_store.add(solution)
         self.refresh()
-        self.broadcast_new_solution(solution)
 
     def _show_issue_detail_page_for_current_issue(self) -> None:
         current_id = self.issue_detail_page.current_issue_id

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Generic, Type, TypeVar
+from uuid import UUID
 
 from ipv8.messaging.payload_dataclass import DataClassPayload
 
@@ -9,7 +10,7 @@ TMsg = TypeVar("TMsg", bound="BaseMessage")
 class BaseMessage(DataClassPayload, ABC, Generic[TModel]):
     @property
     @abstractmethod
-    def entity_id(self) -> str: ...
+    def entity_id(self) -> UUID: ...
 
     @abstractmethod
     def brief(self) -> str:

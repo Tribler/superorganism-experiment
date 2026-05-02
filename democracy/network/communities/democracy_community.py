@@ -16,12 +16,11 @@ from democracy.models.issue import Issue
 from democracy.models.issue_vote import IssueVote
 from democracy.network.messages.solution_message import SolutionMessage
 from democracy.network.messages.solution_vote_message import SolutionVoteMessage
-from democracy.storage.json_store import JSONStore
-
-TModel = TypeVar("TModel")
-TMsg = TypeVar("TMsg", bound=BaseMessage)
+from democracy.storage.repository import DemocracySyncRepository
 
 logger = logging.getLogger(f"superorganism.{__name__}")
+
+TModel = TypeVar("TModel")
 
 
 class DemocracyCommunity(Community):
@@ -40,10 +39,7 @@ class DemocracyCommunity(Community):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
 
-        self.issue_store: JSONStore[Issue] = settings.issue_store
-        self.issue_vote_store: JSONStore[IssueVote] = settings.issue_vote_store
-        self.solution_store: JSONStore[Solution] = settings.solution_store
-        self.solution_vote_store: JSONStore[SolutionVote] = settings.solution_vote_store
+        self.repository: DemocracySyncRepository = settings.repository
         self.data_changed = settings.data_changed
 
         # Register the message handlers for messages.
@@ -53,7 +49,7 @@ class DemocracyCommunity(Community):
         self.add_message_handler(SolutionVoteMessage, self.on_solution_vote_message)
 
     def _multicast(
-        self, payload: BaseMessage, skip_peers: Optional[Set[Peer]] = None
+        self, payload: BaseMessage[object], skip_peers: Optional[Set[Peer]] = None
     ) -> None:
         """
         Multicasts a given message payload to all connected peers and skips the peers in skip_peers.
@@ -73,11 +69,12 @@ class DemocracyCommunity(Community):
             )
             self.ez_send(peer, payload)
 
-    def _broadcast_store(
-        self, store, to_message: Callable[[TModel], BaseMessage], label: str
+    def _broadcast_items(
+        self,
+        items: list[TModel],
+        to_message: Callable[[TModel], BaseMessage[object]],
+        label: str,
     ) -> None:
-        items = store.get_all()
-
         if not items:
             return
 
@@ -101,20 +98,26 @@ class DemocracyCommunity(Community):
 
             :return: None
             """
-            self._broadcast_store(
-                self.issue_store, IssueMessage.from_model, label="issues"
+            self._broadcast_items(
+                self.repository.get_all_issues(),
+                IssueMessage.from_model,
+                label="issues",
             )
 
-            self._broadcast_store(
-                self.issue_vote_store, IssueVoteMessage.from_model, label="issue votes"
+            self._broadcast_items(
+                self.repository.get_all_issue_votes(),
+                IssueVoteMessage.from_model,
+                label="issue votes",
             )
 
-            self._broadcast_store(
-                self.solution_store, SolutionMessage.from_model, label="solutions"
+            self._broadcast_items(
+                self.repository.get_all_solutions(),
+                SolutionMessage.from_model,
+                label="solutions",
             )
 
-            self._broadcast_store(
-                self.solution_vote_store,
+            self._broadcast_items(
+                self.repository.get_all_solution_votes(),
                 SolutionVoteMessage.from_model,
                 label="solution votes",
             )
@@ -130,18 +133,23 @@ class DemocracyCommunity(Community):
         )
 
     def _handle_incoming_message(
-        self, peer: Peer, payload: TMsg, store, on_added: Callable[[], None]
+        self,
+        peer: Peer,
+        payload: BaseMessage[TModel],
+        existing_item: TModel | None,
+        add_item: Callable[[TModel], None],
+        on_added: Callable[[], None],
     ) -> None:
         logger.debug(f"{self.my_peer}: Received {payload.brief()} from peer {peer}.")
 
-        if store.get(payload.entity_id):
+        if existing_item is not None:
             logger.debug(
                 f"{self.my_peer}: Already knew about {payload.brief()}. Nothing updated."
             )
             return
 
         model = payload.to_model()
-        store.add(model)
+        add_item(model)
         on_added()
 
         self._multicast(payload, skip_peers={peer})
@@ -156,7 +164,11 @@ class DemocracyCommunity(Community):
         :return: None
         """
         self._handle_incoming_message(
-            peer, payload, store=self.issue_store, on_added=self.data_changed
+            peer,
+            payload,
+            existing_item=self.repository.get_issue(payload.entity_id),
+            add_item=self.repository.add_issue,
+            on_added=self.data_changed,
         )
 
     def on_create_issue(self, issue: Issue) -> None:
@@ -178,7 +190,11 @@ class DemocracyCommunity(Community):
         :return: None
         """
         self._handle_incoming_message(
-            peer, payload, store=self.issue_vote_store, on_added=self.data_changed
+            peer,
+            payload,
+            existing_item=self.repository.get_issue_vote(payload.entity_id),
+            add_item=self.repository.add_issue_vote,
+            on_added=self.data_changed,
         )
 
     def on_issue_vote(self, vote: IssueVote) -> None:
@@ -200,7 +216,11 @@ class DemocracyCommunity(Community):
         :return: None
         """
         self._handle_incoming_message(
-            peer, payload, store=self.solution_store, on_added=self.data_changed
+            peer,
+            payload,
+            existing_item=self.repository.get_solution(payload.entity_id),
+            add_item=self.repository.add_solution,
+            on_added=self.data_changed,
         )
 
     def on_create_solution(self, solution: Solution) -> None:
@@ -224,7 +244,11 @@ class DemocracyCommunity(Community):
         :return: None
         """
         self._handle_incoming_message(
-            peer, payload, store=self.solution_vote_store, on_added=self.data_changed
+            peer,
+            payload,
+            existing_item=self.repository.get_solution_vote(payload.entity_id),
+            add_item=self.repository.add_solution_vote,
+            on_added=self.data_changed,
         )
 
     def on_solution_vote(self, vote: SolutionVote) -> None:
