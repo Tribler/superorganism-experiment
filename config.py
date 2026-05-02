@@ -2,8 +2,7 @@ from typing import Final
 
 from authentication.bitcoin.rpc_client import BitcoinRpcConfig
 
-DATA_PATH: Final[str] = "democracy/data/"
-KEYS_PATH: Final[str] = "democracy/keys/"
+DATA_PATH: Final[str] = ".data/"
 COMMUNICATION_INTERVAL: Final[float] = 60.0 # Seconds
 UI_REFRESH_DELAY: Final[int] = 100 # Milliseconds
 

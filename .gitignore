@@ -326,16 +326,8 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript
 
-# Democracty specific ignores
-
-# Keys folder
-democracy/keys/
-
 # Data folder
-democracy/data/
+.data/
 
 # Bitcoin regtest data
 .bitcoin/
-
-# Accounts
-.superorganism/

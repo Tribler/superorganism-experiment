@@ -12,7 +12,7 @@ from PySide6.QtCore import QThread, Signal, Slot
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
 from ipv8_service import IPv8
 
-from config import KEYS_PATH
+from config import DATA_PATH
 from democracy.models.solution import Solution
 from democracy.models.solution_vote import SolutionVote
 from democracy.network.communities.democracy_community import DemocracyCommunity
@@ -131,8 +131,9 @@ class IPv8Thread(QThread):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         self._repository = self._repository_factory.create_sync_repository()
 
-        os.makedirs(Path(KEYS_PATH), exist_ok=True)
-        builder.add_key("my peer", "curve25519", f"{KEYS_PATH}/{str(self._user_id)}.pem")
+        keys_path = Path(DATA_PATH) / "democracy" / "keys"
+        os.makedirs(keys_path, exist_ok=True)
+        builder.add_key("my peer", "curve25519", f"{keys_path}/{str(self._user_id)}.pem")
 
         # Thread -> GUI callback: just emit signal; GUI will refresh (coalesced)
         def _data_changed_callback() -> None:
