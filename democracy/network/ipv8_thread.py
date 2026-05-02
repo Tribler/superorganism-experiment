@@ -4,7 +4,7 @@ import asyncio
 import os
 from collections import deque
 from pathlib import Path
-from typing import Optional, Tuple, Union, Deque
+from typing import Deque, Optional, Tuple, Union
 from uuid import UUID
 
 from PySide6.QtCore import QThread, Signal, Slot
@@ -18,7 +18,8 @@ from democracy.models.solution_vote import SolutionVote
 from democracy.network.communities.democracy_community import DemocracyCommunity
 from democracy.models.issue import Issue
 from democracy.models.issue_vote import IssueVote
-from democracy.storage.json_store import JSONStore
+from democracy.storage.repository import DemocracySyncRepository
+from democracy.storage.repository_factory import DemocracyRepositoryFactory
 
 
 QueuedItem = Tuple[str, Union[Issue, IssueVote, Solution, SolutionVote]]
@@ -44,18 +45,13 @@ class IPv8Thread(QThread):
     def __init__(
         self,
         user_id: UUID,
-        issue_store: JSONStore[Issue],
-        issue_vote_store: JSONStore[IssueVote],
-        solution_store: JSONStore[Solution],
-        solution_vote_store: JSONStore[SolutionVote],
+        repository_factory: DemocracyRepositoryFactory,
         parent=None,
     ):
         super().__init__(parent)
         self._user_id = user_id
-        self._issue_store = issue_store
-        self._issue_vote_store = issue_vote_store
-        self._solution_store = solution_store
-        self._solution_vote_store = solution_vote_store
+        self._repository_factory = repository_factory
+        self._repository: Optional[DemocracySyncRepository] = None
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ipv8: Optional[IPv8] = None
@@ -104,6 +100,8 @@ class IPv8Thread(QThread):
                 self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             except Exception:
                 pass
+            if self._repository is not None:
+                self._repository.close()
             self._loop.close()
 
     # -----------------------
@@ -131,6 +129,7 @@ class IPv8Thread(QThread):
     # -----------------------
     async def _start_community(self) -> DemocracyCommunity:
         builder = ConfigBuilder().clear_keys().clear_overlays()
+        self._repository = self._repository_factory.create_sync_repository()
 
         os.makedirs(Path(KEYS_PATH), exist_ok=True)
         builder.add_key("my peer", "curve25519", f"{KEYS_PATH}/{str(self._user_id)}.pem")
@@ -145,10 +144,7 @@ class IPv8Thread(QThread):
             walkers=[WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})],
             bootstrappers=default_bootstrap_defs,
             initialize={
-                "issue_store": self._issue_store,
-                "issue_vote_store": self._issue_vote_store,
-                "solution_store": self._solution_store,
-                "solution_vote_store": self._solution_vote_store,
+                "repository": self._repository,
                 "data_changed": _data_changed_callback,
             },
             on_start=[("on_start",)],
@@ -173,8 +169,12 @@ class IPv8Thread(QThread):
 
             if kind == "issue":
                 self._overlay.on_create_issue(payload)  # type: ignore[arg-type]
-            elif kind == "vote":
-                self._overlay.on_vote(payload)  # type: ignore[arg-type]
+            elif kind == "issue_vote":
+                self._overlay.on_issue_vote(payload)  # type: ignore[arg-type]
+            elif kind == "solution":
+                self._overlay.on_create_solution(payload)  # type: ignore[arg-type]
+            elif kind == "solution_vote":
+                self._overlay.on_solution_vote(payload)  # type: ignore[arg-type]
 
         # After applying queued actions, signal the GUI to refresh once (coalesced on UI side)
         self.dataChanged.emit()
