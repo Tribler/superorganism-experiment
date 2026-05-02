@@ -13,7 +13,7 @@ from authentication.services.registration_service import RegistrationService
 from authentication.storage.in_memory_challenge_store import InMemoryChallengeStore
 from authentication.storage.json_registration_store import JsonRegistrationStore
 from authentication.transaction_verification.rpc_verifier import RpcVerifier
-from config import REGTEST_RPC_CONFIG
+from config import REGTEST_RPC_CONFIG, DATA_PATH
 from ui.common.fonts import load_application_fonts
 from ui.landing.landing_page import LandingPageWidget
 
@@ -47,7 +47,7 @@ def main() -> None:
     app.setStyleSheet(stylesheet)
 
     transaction_verifier = RpcVerifier.from_config(REGTEST_RPC_CONFIG)
-    registration_store = JsonRegistrationStore(".superorganism/registrations.json")
+    registration_store = JsonRegistrationStore(Path(DATA_PATH) / "authentication" / "registrations.json")
 
     registration_service = RegistrationService(
         transaction_verifier=transaction_verifier,

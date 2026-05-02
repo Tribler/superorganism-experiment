@@ -100,7 +100,7 @@ def main() -> None:
     user = Person()  # Person generates a random ID by default
 
     # --- Persistence ---
-    base_path = Path(DATA_PATH) / str(user.id)
+    base_path = Path(DATA_PATH) / "democracy" / str(user.id)
     database_path = base_path / "democracy.sqlite"
 
     repository_factory: DemocracyRepositoryFactory = SQLiteDemocracyRepositoryFactory(
