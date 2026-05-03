@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import libtorrent as lt
+try:
+    import libtorrent as lt
+except ImportError:  # sim image drops libtorrent; Seedbox is never constructed there
+    lt = None  # type: ignore[assignment]
 
 from config import Config
 from utils import setup_logger

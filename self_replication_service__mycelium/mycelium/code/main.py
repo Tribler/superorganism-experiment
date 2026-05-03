@@ -49,7 +49,7 @@ class Orchestrator:
             repo_path=Config.BASE_DIR,
             branch=Config.REPO_BRANCH
         )
-        self.seedbox = Seedbox(
+        self.seedbox = None if Config.SIM_MODE else Seedbox(
             content_dir=Config.CONTENT_DIR,
             tracker_url=Config.TORRENT_TRACKER,
             port_min=Config.SEEDBOX_PORT_MIN,
@@ -210,6 +210,18 @@ class Orchestrator:
         finally:
             await self.announcer.stop()
 
+    async def run_ipv8_only(self) -> None:
+        """Sim-mode IPV8 lifecycle: bring the LiberationCommunity up for WHOAMI gossip,
+        but skip the LiberatedContentPayload announce loop (no seeded content exists)."""
+        try:
+            await self.announcer.start()
+            while self.running:
+                await asyncio.sleep(60)
+        except Exception as e:
+            logger.error("IPV8-only loop error: %s", e, exc_info=True)
+        finally:
+            await self.announcer.stop()
+
     async def monitor_loop(self) -> None:
         """Periodically refresh node financial/operational state."""
         monitor = node_monitor.get_monitor()
@@ -254,24 +266,30 @@ class Orchestrator:
         logger.info("Update check interval: %ds", Config.UPDATE_CHECK_INTERVAL)
         logger.info("Content directory: %s", Config.CONTENT_DIR)
 
-        # Download content if needed (one-time, before seedbox)
-        await self.download_content_if_needed()
+        if Config.SIM_MODE:
+            logger.info("SIM_MODE enabled — skipping seeding subsystem (download / seedbox / torrent announcer)")
+        else:
+            # Download content if needed (one-time, before seedbox)
+            await self.download_content_if_needed()
 
-        # Initialize seedbox first (blocking) so content is available for announcer
-        if not await self.initialize_seedbox():
-            logger.error("Cannot start without seedbox, exiting")
-            return
+            # Initialize seedbox first (blocking) so content is available for announcer
+            if not await self.initialize_seedbox():
+                logger.error("Cannot start without seedbox, exiting")
+                return
 
         tasks = [
             asyncio.create_task(self.check_for_updates()),
             asyncio.create_task(self.heartbeat()),
-            asyncio.create_task(self.run_seedbox_loop()),
-            asyncio.create_task(self.run_torrent_announcer()),
             asyncio.create_task(self.run_seedbox_info_announcer()),
             asyncio.create_task(self.monitor_loop()),
             asyncio.create_task(self.run_decision_loop()),
         ]
-        self._tasks = [self.seedbox, *tasks]
+        if Config.SIM_MODE:
+            tasks.append(asyncio.create_task(self.run_ipv8_only()))
+        else:
+            tasks.append(asyncio.create_task(self.run_seedbox_loop()))
+            tasks.append(asyncio.create_task(self.run_torrent_announcer()))
+        self._tasks = [self.seedbox, *tasks] if self.seedbox is not None else list(tasks)
 
         try:
             await asyncio.gather(*tasks)

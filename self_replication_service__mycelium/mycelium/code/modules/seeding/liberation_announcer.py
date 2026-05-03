@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Optional
 
 import aiohttp
-from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
+from ipv8.configuration import (
+    Bootstrapper,
+    BootstrapperDefinition,
+    ConfigBuilder,
+    Strategy,
+    WalkerDefinition,
+    default_bootstrap_defs,
+)
 from ipv8_service import IPv8
 
 from config import Config
@@ -31,12 +38,43 @@ logger = setup_logger(
 )
 
 
+def _resolve_bootstrap_defs():
+    """Return ipv8 bootstrap defs, honouring MYCELIUM_IPV8_BOOTSTRAP override.
+
+    Sim safety rail: a sim node must never fall back to Tribler defaults — the
+    LiberationCommunity ID is shared with prod and SwarmHealth-Checker, so
+    discovering real peers would corrupt both fleets.
+    """
+    raw = Config.IPV8_BOOTSTRAP.strip()
+    if not raw:
+        return default_bootstrap_defs
+
+    ip_addresses = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        host, _, port = entry.rpartition(":")
+        if not host or not port:
+            raise ValueError(f"MYCELIUM_IPV8_BOOTSTRAP entry must be host:port, got {entry!r}")
+        ip_addresses.append((host, int(port)))
+
+    if not ip_addresses:
+        raise ValueError("MYCELIUM_IPV8_BOOTSTRAP set but parsed empty")
+
+    logger.info("Using overridden IPV8 bootstrap peers: %s", ip_addresses)
+    return [BootstrapperDefinition(
+        Bootstrapper.DispersyBootstrapper,
+        {"ip_addresses": ip_addresses, "dns_addresses": [], "bootstrap_timeout": 30.0},
+    )]
+
+
 class LiberationAnnouncer:
     """
     Announces seeded content to the IPV8 network.
     """
 
-    def __init__(self, seedbox: Seedbox, key_file: Optional[str] = None):
+    def __init__(self, seedbox: Optional[Seedbox], key_file: Optional[str] = None):
         self.seedbox = seedbox
         self.key_file = key_file or str(Config.DATA_DIR / "liberation_key.pem")
         self.ipv8: Optional[IPv8] = None
@@ -60,11 +98,13 @@ class LiberationAnnouncer:
 
         builder.add_key("liberation_peer", "medium", str(key_path))
 
+        bootstrap_defs = _resolve_bootstrap_defs()
+
         builder.add_overlay(
             "LiberationCommunity",
             "liberation_peer",
             [WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})],
-            default_bootstrap_defs,
+            bootstrap_defs,
             {},
             [("started",)]
         )
@@ -92,8 +132,11 @@ class LiberationAnnouncer:
             self.community.set_seedbox_info_callback(registry.on_seedbox_info_received)
             logger.info("Peer registry wired to seedbox info callback")
 
-        self.community.set_new_peer_callback(self._send_all_content_to_peer)
-        logger.info("New-peer content burst callback registered")
+        if self.seedbox is not None:
+            self.community.set_new_peer_callback(self._send_all_content_to_peer)
+            logger.info("New-peer content burst callback registered")
+        else:
+            logger.info("Sim mode (no seedbox) — skipping new-peer content burst callback")
 
         logger.info("LiberationCommunity is running")
         logger.info("Community ID: %s", self.community.community_id.hex())

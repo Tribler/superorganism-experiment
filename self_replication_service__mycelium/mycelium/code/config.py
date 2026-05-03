@@ -90,6 +90,14 @@ class Config:
 
     # SporeStack / VPS identity
     SPORESTACK_TOKEN_FILE: Path = DATA_DIR / "sporestack_token"
+    SPORESTACK_BASE_URL: str = os.getenv("MYCELIUM_SPORESTACK_BASE_URL", "https://api.sporestack.com").rstrip("/")
+
+    # Sim-mode overrides (production: all unset → no behavioural change)
+    # Comma-separated host:port list; when set, replaces ipv8 default_bootstrap_defs.
+    # Critical safety rail in sim: prevents fallback to Tribler defaults, which would
+    # let sim nodes discover real swarm peers (LiberationCommunity ID is shared with prod).
+    IPV8_BOOTSTRAP: str = os.getenv("MYCELIUM_IPV8_BOOTSTRAP", "")
+    SIM_MODE: bool = os.getenv("MYCELIUM_SIM_MODE", "").strip().lower() in ("1", "true", "yes")
 
     # SporeStack / VPS provisioning defaults (injected by deployer; mirror mycelium-bootstrap/config.json)
     VPS_PROVIDER: str      = os.getenv("MYCELIUM_VPS_PROVIDER", "sporestack_eu")

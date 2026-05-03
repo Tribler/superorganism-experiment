@@ -22,7 +22,7 @@ def get_info(token: str) -> Optional[dict]:
     Get token info from SporeStack API.
     """
     try:
-        url = f"https://api.sporestack.com/token/{token}/info"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/info"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status != 200:
@@ -39,7 +39,7 @@ def create_invoice(token: str, dollars: int) -> Optional[dict]:
     SporeStack minimum $5; caller enforces.
     """
     try:
-        url = f"https://api.sporestack.com/token/{token}/add"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/add"
         payload = json.dumps({"dollars": dollars, "currency": "btc"}).encode()
         req = urllib.request.Request(
             url, data=payload,
@@ -66,7 +66,7 @@ def calculate_monthly_vps_cost(flavor: str, provider: str) -> int:
     """
     try:
         url = (
-            f"https://api.sporestack.com/server/quote"
+            f"{Config.SPORESTACK_BASE_URL}/server/quote"
             f"?flavor={flavor}&days=30&provider={provider}"
         )
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -94,7 +94,7 @@ def get_servers(token: str) -> list:
     "no servers exist" — critical for orphan-server adoption during spawn recovery.
     """
     try:
-        url = f"https://api.sporestack.com/token/{token}/servers?include_forgotten=false&include_deleted=false"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/servers?include_forgotten=false&include_deleted=false"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status != 200:
@@ -113,7 +113,7 @@ def generate_token() -> Optional[str]:
     Returns the token string stripped of whitespace, or None on HTTP/network error.
     """
     try:
-        url = "https://api.sporestack.com/token"
+        url = f"{Config.SPORESTACK_BASE_URL}/token"
         req = urllib.request.Request(url, headers={"Accept": "text/plain"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status != 200:
@@ -130,7 +130,7 @@ def get_balance(token: str) -> Optional[dict]:
     Returns the dict, or None on HTTP/network error.
     """
     try:
-        url = f"https://api.sporestack.com/token/{token}/balance"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/balance"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status != 200:
@@ -185,7 +185,7 @@ def launch_server(
         payload["user_data"] = user_data
 
     try:
-        url = f"https://api.sporestack.com/token/{token}/servers"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/servers"
         data = json.dumps(payload).encode()
         req = urllib.request.Request(
             url, data=data,
@@ -211,7 +211,7 @@ def launch_server(
 def _get_server(token: str, machine_id: str) -> Optional[dict]:
     """GET /token/{token}/servers/{machine_id} → server dict, or None on error."""
     try:
-        url = f"https://api.sporestack.com/token/{token}/servers/{machine_id}"
+        url = f"{Config.SPORESTACK_BASE_URL}/token/{token}/servers/{machine_id}"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status != 200:
