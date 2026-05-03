@@ -112,6 +112,10 @@ class Orchestrator:
                         logger.warning(
                             "Spawn in progress — deferring restart until spawn completes"
                         )
+                    elif ps and ps.is_failsafe_in_progress():
+                        logger.warning(
+                            "Failsafe in progress — deferring restart until failsafe completes"
+                        )
                     else:
                         old_version = _get_version()
                         self.code_sync.pull_updates()
@@ -298,9 +302,9 @@ def main() -> int:
             ps.set_caution_trait(Config.INITIAL_CAUTION_TRAIT)
             logger.info("Initialized caution trait to %.2f", Config.INITIAL_CAUTION_TRAIT)
         if ps.is_spawn_in_progress():
-            logger.warning("Detected interrupted spawn from previous run — flag kept for decision loop")
+            logger.warning("Detected interrupted spawn from previous run - flag kept for decision loop")
         if ps.is_failsafe_in_progress():
-            logger.warning("Detected interrupted failsafe from previous run — flag kept for decision loop")
+            logger.warning("Detected interrupted failsafe from previous run - flag kept for decision loop")
 
         wallet_module.initialize_wallet()
         w = wallet_module.get_wallet()
