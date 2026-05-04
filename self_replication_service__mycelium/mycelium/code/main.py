@@ -132,11 +132,32 @@ class Orchestrator:
             await asyncio.sleep(Config.UPDATE_CHECK_INTERVAL)
 
     async def heartbeat(self) -> None:
-        """Periodic heartbeat logging."""
+        """Periodic heartbeat logging + thesis state_snapshot emission."""
         while self.running:
             registry = peer_registry.get_registry()
             live_peers = registry.get_peer_count() if registry else 0
             logger.info("Orchestrator Running | live fleet peers: %d", live_peers)
+
+            ps = state_module.get()
+            monitor = node_monitor.get_monitor()
+            w = wallet_module.get_wallet()
+            ns = monitor.get_state() if monitor else None
+
+            event_logger.get().log_event("state_snapshot", {
+                "ts": time.time(),
+                "sim": bool(Config.SIM_MODE),
+                "friendly_name": Config.FRIENDLY_NAME,
+                "btc_address": w.get_receiving_address() if w else "",
+                "btc_balance_sat": ns.btc_balance_sat if ns else 0,
+                "days_remaining": ns.days_remaining if ns else None,
+                "caution_trait": ps.get_caution_trait() if ps else 0.5,
+                "peer_count": live_peers,
+                "spawn_in_progress": ps.is_spawn_in_progress() if ps else False,
+                "failsafe_in_progress": ps.is_failsafe_in_progress() if ps else False,
+                "git_commit_hash": _get_version(),
+                "public_ip": Config.PUBLIC_IP or "",
+            })
+
             await asyncio.sleep(Config.HEARTBEAT_INTERVAL)
 
     async def download_content_if_needed(self) -> None:

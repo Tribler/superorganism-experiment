@@ -6,11 +6,13 @@ Caller (deployer.spawn_child) owns the final disconnect.
 """
 
 import asyncio
+from typing import Union
 
 from config import Config
 from utils import setup_logger
 from ..orchestration.spawn_thresholds import mutate_caution_trait
 from .errors import SpawnError
+from .sim_deployer import SimDeployer
 from .spawn_identity import ChildIdentity
 from .spawn_provision import ChildVpsInfo
 from .ssh_deployer import SSHDeployer
@@ -19,12 +21,24 @@ logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", le
 
 _POST_START_SETTLE_SECONDS = 15
 
+ChildDeployer = Union[SSHDeployer, SimDeployer]
+
 
 async def deploy_child_code(
     identity: ChildIdentity,
     vps_info: ChildVpsInfo,
-) -> SSHDeployer:
+) -> ChildDeployer:
     """SSH into child VPS, install deps, deploy code and content. Returns connected deployer (caller owns disconnect)."""
+    if Config.SIM_MODE:
+        logger.info(
+            "Sim mode: returning SimDeployer for spawn_id=%s machine_id=%s (LXC image is pre-baked)",
+            identity.spawn_id, vps_info.machine_id,
+        )
+        return SimDeployer(
+            machine_id=vps_info.machine_id,
+            base_url=Config.SPORESTACK_BASE_URL,
+        )
+
     logger.info(
         "Deploying code to child VPS: spawn_id=%s host=%s:%d",
         identity.spawn_id, vps_info.host, vps_info.ssh_port,
@@ -60,7 +74,7 @@ async def deploy_child_code(
 
 
 async def boot_child_orchestrator(
-    deployer: SSHDeployer,
+    deployer: ChildDeployer,
     identity: ChildIdentity,
     parent_caution_trait: float,
 ) -> float:
@@ -68,8 +82,9 @@ async def boot_child_orchestrator(
     child_caution = mutate_caution_trait(parent_caution_trait)
 
     env = {
-        "MYCELIUM_CAUTION_TRAIT": f"{child_caution:.6f}",
+        "MYCELIUM_FRIENDLY_NAME": identity.spawn_id,
         "MYCELIUM_PARENT_NAME": Config.FRIENDLY_NAME,
+        "MYCELIUM_CAUTION_TRAIT": f"{child_caution:.6f}",
         "MYCELIUM_CAUTION_MUTATION_SIGMA": str(Config.CAUTION_MUTATION_SIGMA),
         "MYCELIUM_SPAWN_THRESHOLD_DAYS": str(Config.SPAWN_THRESHOLD_DAYS),
         "MYCELIUM_SPAWN_RESERVE_DAYS": str(Config.SPAWN_RESERVE_DAYS),

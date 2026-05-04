@@ -84,8 +84,7 @@ class Config:
     TOPUP_TARGET_DAYS: int     = int(os.getenv("MYCELIUM_TOPUP_TARGET_DAYS", "30"))
 
     # Max seconds the shutdown handler will defer a signal while a spawn is in progress.
-    # After this, SIGTERM/SIGINT is honoured so the operator can kill a wedged spawn
-    # without SIGKILL (which would leave spawn_in_progress=True and re-trigger recovery).
+    # After this, SIGTERM/SIGINT is honoured so operator can kill a bricked spawn
     MAX_SPAWN_DURATION: int = int(os.getenv("MYCELIUM_MAX_SPAWN_DURATION", str(2 * 3600)))  # 2h
 
     # SporeStack / VPS identity
