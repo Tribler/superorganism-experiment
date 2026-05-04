@@ -1,0 +1,4 @@
+pyipv8==3.1.0
+bitcoinlib>=0.6.0
+paramiko
+scp
