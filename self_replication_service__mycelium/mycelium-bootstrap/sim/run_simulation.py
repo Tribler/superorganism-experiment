@@ -4,6 +4,9 @@
 Brings up the BTC regtest stack, event collector, mock SporeStack, IPv8
 bootstrap container, and a single genesis mycelium node — then tails the
 genesis orchestrator log. Companion teardown: stop_simulation.sh.
+
+All tunable parameters live in sim_config.toml next to this file.
+CLI flags override config values when provided.
 """
 import argparse
 import json
@@ -15,6 +18,7 @@ import signal
 import subprocess
 import sys
 import time
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,13 +28,9 @@ BOOTSTRAP_DIR = SIM_DIR.parent
 SIM_HOME = pathlib.Path.home() / ".mycelium-sim"
 LOG_DIR = SIM_HOME / "logs"
 
-EVENT_COLLECTOR_URL = "http://127.0.0.1:8765"
-MOCK_SPORESTACK_URL = "http://127.0.0.1:8766"
 MYCELIUM_BASE_IMAGE = "mycelium-base"
 IPV8_BOOTSTRAP_IMAGE = "ipv8-bootstrap-base"
 IPV8_BOOTSTRAP_NAME = "ipv8-bootstrap"
-LXC_BRIDGE = "lxdbr0"
-EVENT_API_KEY = "123456789"
 GENESIS_NAME = "genesis"
 BCLI_DATADIR = SIM_HOME / "regtest"
 BCLI = [
@@ -44,6 +44,12 @@ os.environ.setdefault("MYCELIUM_SIM_MODE", "1")
 sys.path.insert(0, str(BOOTSTRAP_DIR))
 from lib.wallet import BitcoinWallet  # noqa: E402
 from lib.deployer import generate_ssh_keypair  # noqa: E402
+
+
+def load_config() -> dict:
+    cfg_path = SIM_DIR / "sim_config.toml"
+    with open(cfg_path, "rb") as f:
+        return tomllib.load(f)
 
 
 def _log(msg: str) -> None:
@@ -84,28 +90,30 @@ def _wait_for_healthz(url: str, timeout: float = 30) -> None:
     raise RuntimeError(f"timed out waiting for {url}: {last_err}")
 
 
-def preflight() -> None:
+def preflight(cfg: dict) -> None:
     for binary in ("lxc", "bitcoind", "electrs", "bitcoin-cli"):
         if not shutil.which(binary):
             sys.exit(f"[run_sim] missing required binary: {binary}")
+    bridge = cfg["network"]["lxc_bridge"]
     try:
         cidr = subprocess.check_output(
-            ["lxc", "network", "get", LXC_BRIDGE, "ipv4.address"],
+            ["lxc", "network", "get", bridge, "ipv4.address"],
             text=True, timeout=5,
         ).strip()
     except Exception as e:
         sys.exit(
-            f"[run_sim] cannot read lxd bridge '{LXC_BRIDGE}': {e}\n"
+            f"[run_sim] cannot read lxd bridge '{bridge}': {e}\n"
             "         Run `lxd init` and ensure the default bridge exists."
         )
     if not cidr:
         sys.exit(
-            f"[run_sim] lxd bridge '{LXC_BRIDGE}' has no ipv4.address — run `lxd init`"
+            f"[run_sim] lxd bridge '{bridge}' has no ipv4.address — run `lxd init`"
         )
 
 
-def start_btc_stack() -> None:
+def start_btc_stack(cfg: dict) -> None:
     _log("starting BTC regtest stack...")
+    os.environ["BTC_BLOCK_INTERVAL"] = str(cfg["btc"]["block_interval_s"])
     subprocess.run([str(SIM_DIR / "btc" / "start.sh")], check=True)
 
 
@@ -129,20 +137,40 @@ def _spawn_background(name: str, script_path: pathlib.Path,
     pid_path.write_text(str(proc.pid))
 
 
-def start_event_collector() -> None:
+def start_event_collector(cfg: dict) -> None:
     _log("starting event collector...")
+    event_collector_url = f"http://127.0.0.1:{cfg['network']['event_collector_port']}"
     _spawn_background("event_collector", SIM_DIR / "event_collector.py")
-    _wait_for_healthz(f"{EVENT_COLLECTOR_URL}/healthz")
+    _wait_for_healthz(f"{event_collector_url}/healthz")
     _log("event collector healthy")
 
 
-def start_mock_sporestack(time_scale: float) -> None:
-    _log(f"starting mock SporeStack (TIME_SCALE={time_scale})...")
-    _spawn_background(
-        "mock_sporestack", SIM_DIR / "mock_sporestack.py",
-        extra_env={"MYCELIUM_SIM_TIME_SCALE": str(time_scale)},
-    )
-    _wait_for_healthz(f"{MOCK_SPORESTACK_URL}/healthz", timeout=60)
+def start_mock_sporestack(cfg: dict) -> None:
+    ss = cfg["sporestack"]
+    net = cfg["network"]
+    ivl = cfg["intervals"]
+    _log(f"starting mock SporeStack (time_scale={ss['time_scale']})...")
+    extra_env = {
+        "MYCELIUM_SIM_TIME_SCALE":          str(ss["time_scale"]),
+        "MYCELIUM_SIM_BTC_USD":             str(ss["btc_usd"]),
+        "MYCELIUM_SIM_MONTHLY_COST_CENTS":  str(ss["monthly_cost_cents"]),
+        "MYCELIUM_SIM_INVOICE_LIFETIME_S":  str(ss["invoice_lifetime_s"]),
+        "MYCELIUM_SIM_ELECTRS_PORT":        str(net["electrs_port"]),
+        "MYCELIUM_SIM_EVENT_COLLECTOR_PORT": str(net["event_collector_port"]),
+        "MYCELIUM_SIM_MOCK_PORT":           str(net["mock_sporestack_port"]),
+        "MYCELIUM_SIM_BOOTSTRAP_PORT":      str(net["ipv8_bootstrap_port"]),
+        "MYCELIUM_SIM_LXC_BRIDGE":          net["lxc_bridge"],
+        # Interval defaults applied to every spawned node
+        "MYCELIUM_SIM_DECISION_INTERVAL":      str(ivl["decision_interval"]),
+        "MYCELIUM_SIM_HEARTBEAT_INTERVAL":     str(ivl["heartbeat_interval"]),
+        "MYCELIUM_SIM_PEER_REGISTRY_TTL":      str(ivl["peer_registry_ttl"]),
+        "MYCELIUM_SIM_WHOAMI_BROADCAST":       str(ivl["whoami_broadcast_interval"]),
+        "MYCELIUM_SIM_WHOAMI_GOSSIP_COOLDOWN": str(ivl["whoami_gossip_cooldown"]),
+        "MYCELIUM_SIM_UPDATE_CHECK_INTERVAL":  str(ivl["update_check_interval"]),
+    }
+    mock_sporestack_url = f"http://127.0.0.1:{net['mock_sporestack_port']}"
+    _spawn_background("mock_sporestack", SIM_DIR / "mock_sporestack.py", extra_env=extra_env)
+    _wait_for_healthz(f"{mock_sporestack_url}/healthz", timeout=60)
     _log("mock SporeStack healthy")
 
 
@@ -200,18 +228,20 @@ def _lxc_ipv4(name: str) -> str:
     return ""
 
 
-def launch_ipv8_bootstrap() -> str:
+def launch_ipv8_bootstrap(cfg: dict) -> str:
     _log("launching IPv8 bootstrap container...")
-    inst = _lxc_instance(IPV8_BOOTSTRAP_NAME)
-    if inst is None:
+    # Always start fresh — a half-stuck container from a prior crashed run
+    # carries no state worth keeping, and reusing one whose tracker died
+    # mid-run hides the failure mode behind a successful-looking netstat.
+    if _lxc_instance(IPV8_BOOTSTRAP_NAME) is not None:
         subprocess.run(
-            ["lxc", "launch", IPV8_BOOTSTRAP_IMAGE, IPV8_BOOTSTRAP_NAME],
-            check=True, timeout=120,
+            ["lxc", "delete", "--force", IPV8_BOOTSTRAP_NAME],
+            check=False, timeout=30,
         )
-    elif inst.get("status") != "Running":
-        subprocess.run(
-            ["lxc", "start", IPV8_BOOTSTRAP_NAME], check=True, timeout=30,
-        )
+    subprocess.run(
+        ["lxc", "launch", IPV8_BOOTSTRAP_IMAGE, IPV8_BOOTSTRAP_NAME],
+        check=True, timeout=120,
+    )
     deadline = time.time() + 30
     ip = ""
     while time.time() < deadline:
@@ -222,17 +252,31 @@ def launch_ipv8_bootstrap() -> str:
     if not ip:
         raise RuntimeError("ipv8-bootstrap container never got an IPv4 within 30s")
 
-    # The image entrypoint isn't PID 1 (no openrc service), so `lxc start`
-    # alone leaves the tracker un-started. Mirror mock_sporestack's mycelium
-    # boot pattern: detach the entrypoint via `lxc exec ... nohup &`.
-    #
-    # The first kick can race with a freshly-booted container's userspace
-    # (orphaned-child reparenting before openrc finishes its init sequence has
-    # been observed to drop the python process before it binds), so the loop
-    # below re-kicks every iter until netstat confirms UDP/7759 is listening.
-    # Once one tracker is bound, subsequent kicks fail at bind() and exit —
-    # harmless. busybox-alpine ships `netstat`; iproute2's `ss` is not in the
-    # bootstrap image.
+    # Wait for openrc init to finish before kicking the tracker. Without this,
+    # `lxc exec` lands in a half-booted container where backgrounded processes
+    # get reaped before they bind — observed as `/root/logs/` missing entirely
+    # after a "kick" that appeared to succeed at the host level. getty is the
+    # last service alpine starts, so its presence means init is settled.
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        try:
+            r = subprocess.run(
+                ["lxc", "exec", IPV8_BOOTSTRAP_NAME, "--", "pgrep", "-x", "getty"],
+                check=False, timeout=5, capture_output=True,
+            )
+            if r.returncode == 0:
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+    # Image entrypoint isn't PID 1 (no openrc service for the tracker), so
+    # `lxc start` leaves the tracker un-started. Mirror mock_sporestack's
+    # mycelium boot pattern: detach via `lxc exec ... nohup &`. Re-kick every
+    # iter until netstat confirms UDP/<port> is listening — once one tracker
+    # binds, subsequent kicks fail at bind() and exit, harmless. busybox-alpine
+    # ships `netstat`; iproute2's `ss` is not in the bootstrap image.
+    bootstrap_port = cfg["network"]["ipv8_bootstrap_port"]
     kick_cmd = [
         "lxc", "exec", IPV8_BOOTSTRAP_NAME, "--",
         "sh", "-c",
@@ -242,39 +286,46 @@ def launch_ipv8_bootstrap() -> str:
     ]
     probe_cmd = [
         "lxc", "exec", IPV8_BOOTSTRAP_NAME, "--",
-        "sh", "-c", "netstat -uln 2>/dev/null | grep -q ':7759 '",
+        "sh", "-c", f"netstat -uln 2>/dev/null | grep -q ':{bootstrap_port} '",
     ]
-    deadline = time.time() + 30
+    deadline = time.time() + 60
+    last_kick_err = ""
     while time.time() < deadline:
         try:
             if subprocess.run(probe_cmd, timeout=5).returncode == 0:
-                _log(f"ipv8-bootstrap up at {ip}, tracker listening on UDP 7759")
+                _log(f"ipv8-bootstrap up at {ip}, tracker listening on UDP {bootstrap_port}")
                 return ip
-            subprocess.run(kick_cmd, check=False, timeout=10)
-        except Exception:
-            pass
+            r = subprocess.run(
+                kick_cmd, check=False, timeout=10,
+                capture_output=True, text=True,
+            )
+            if r.returncode != 0:
+                last_kick_err = (r.stderr or r.stdout or "").strip()[:300] or f"rc={r.returncode}"
+        except subprocess.TimeoutExpired:
+            last_kick_err = "lxc exec kick timed out (LXD daemon slow?)"
+        except Exception as e:
+            last_kick_err = f"{type(e).__name__}: {e}"
         time.sleep(1)
     raise RuntimeError(
-        f"ipv8-bootstrap tracker never started listening on {ip}:7759 — "
+        f"ipv8-bootstrap tracker never started listening on {ip}:{bootstrap_port} — "
+        f"last kick err: {last_kick_err!r}; "
         f"check `lxc exec {IPV8_BOOTSTRAP_NAME} -- cat /root/logs/tracker.log`"
     )
 
 
-def get_or_create_genesis_wallet() -> tuple[BitcoinWallet, str]:
+def create_fresh_genesis_wallet() -> tuple[BitcoinWallet, str]:
     SIM_HOME.mkdir(parents=True, exist_ok=True)
     db_path = SIM_HOME / "genesis_wallet.db"
     mnemonic_path = SIM_HOME / "genesis_mnemonic.txt"
+    # Always start fresh — prior balance accumulates otherwise across re-runs
+    db_path.unlink(missing_ok=True)
+    mnemonic_path.unlink(missing_ok=True)
     db_uri = f"sqlite:///{db_path}"
     wallet = BitcoinWallet("mycelium-sim-genesis", network="regtest", db_uri=db_uri)
-    if wallet.exists():
-        wallet.load()
-        mnemonic = mnemonic_path.read_text().strip()
-        _log(f"loaded existing genesis wallet ({wallet.get_balance_btc()} BTC)")
-    else:
-        mnemonic = wallet.create_new()
-        mnemonic_path.write_text(mnemonic + "\n")
-        os.chmod(mnemonic_path, 0o600)
-        _log("created fresh genesis wallet")
+    mnemonic = wallet.create_new()
+    mnemonic_path.write_text(mnemonic + "\n")
+    os.chmod(mnemonic_path, 0o600)
+    _log("created fresh genesis wallet")
     return wallet, mnemonic
 
 
@@ -306,45 +357,76 @@ def fresh_regtest_sink_address() -> str:
     ).strip()
 
 
-def _scan_with_retry(wallet: BitcoinWallet, max_attempts: int = 6, delay: float = 3.0) -> None:
-    """Retry wallet.scan() — electrs is briefly unavailable while indexing a new block."""
+def _scan_until_funded(wallet: BitcoinWallet, min_sat: int,
+                       max_attempts: int = 20, delay: float = 3.0) -> None:
+    """Poll until wallet has spendable UTXOs covering min_sat.
+
+    Three things can lag here: electrs takes a beat to index the freshly mined
+    faucet block; bitcoinlib's `wallet.scan()` populates the transactions table
+    (which feeds `balance()`) before — sometimes well before — the UTXO table
+    that `select_inputs()` actually reads from; and the underlying electrumx
+    `address.listunspent` call can return empty even after `address.history`
+    has reported the tx. Retrying on scan() exceptions or on balance alone is
+    not enough — `wallet.send_to()` will still error with "No unspent
+    transaction outputs found" if the UTXO table is empty.
+    """
+    inner = wallet.wallet
+    last_err: Exception | None = None
     for attempt in range(max_attempts):
         try:
             wallet.scan()
-            return
+            inner.utxos_update(rescan_all=True)
+            utxos = inner.utxos()
+            spendable = sum(u.get("value", 0) for u in utxos)
+            if utxos and spendable >= min_sat:
+                if attempt > 0:
+                    _log(f"wallet funded after {attempt + 1} scans: {len(utxos)} utxo(s), {spendable} sat")
+                return
+            _log(
+                f"wallet has {len(utxos)} utxo(s) totalling {spendable} sat "
+                f"(< required {min_sat}); scan {attempt + 1}/{max_attempts}, "
+                f"retrying in {delay:.0f}s..."
+            )
         except Exception as e:
-            if attempt < max_attempts - 1:
-                _log(f"wallet.scan() attempt {attempt + 1}/{max_attempts} failed: {e}; retrying in {delay:.0f}s...")
-                time.sleep(delay)
-            else:
-                raise
+            last_err = e
+            _log(f"wallet.scan() attempt {attempt + 1}/{max_attempts} failed: {e}; retrying in {delay:.0f}s...")
+        if attempt < max_attempts - 1:
+            time.sleep(delay)
+    if last_err is not None:
+        raise last_err
+    raise RuntimeError(
+        f"wallet never reported spendable UTXOs ≥ {min_sat} sat after "
+        f"{max_attempts} scans — is the faucet TX mined and electrs caught up?"
+    )
 
 
-def buy_genesis_server(wallet: BitcoinWallet, days: int) -> tuple[str, str]:
+def buy_genesis_server(wallet: BitcoinWallet, cfg: dict,
+                       mock_sporestack_url: str) -> tuple[str, str]:
     """Quote → invoice → pay → poll credit → launch server. Returns (token, machine_id)."""
-    token = _http_get_text(f"{MOCK_SPORESTACK_URL}/token")
+    days = cfg["genesis"]["days"]
+    token = _http_get_text(f"{mock_sporestack_url}/token")
     _log(f"got token={token[:8]}..")
 
-    quote = _http_get_json(f"{MOCK_SPORESTACK_URL}/server/quote?days={days}")
+    quote = _http_get_json(f"{mock_sporestack_url}/server/quote?days={days}")
     cents = int(quote["cents"])
     dollars = math.ceil(cents / 100)
     _log(f"quote: {cents}c for {days} days → ${dollars} invoice")
 
     add = _http_post_json(
-        f"{MOCK_SPORESTACK_URL}/token/{token}/add", {"dollars": dollars},
+        f"{mock_sporestack_url}/token/{token}/add", {"dollars": dollars},
     )
     invoice = add["invoice"]
     pay_addr = parse_bip21_address(invoice["payment_uri"])
     amount_sat = parse_bip21_amount_sat(invoice["payment_uri"])
     _log(f"invoice: pay {amount_sat} sat to {pay_addr}")
 
-    _scan_with_retry(wallet)
+    _scan_until_funded(wallet, amount_sat)
     txid = wallet.send(pay_addr, amount_sat)
     _log(f"sent {txid}")
 
     deadline = time.time() + 60
     while time.time() < deadline:
-        info = _http_get_json(f"{MOCK_SPORESTACK_URL}/token/{token}/info")
+        info = _http_get_json(f"{mock_sporestack_url}/token/{token}/info")
         if info.get("balance_cents", 0) >= cents - 100:
             _log(f"token credited: balance_cents={info['balance_cents']}")
             break
@@ -357,7 +439,7 @@ def buy_genesis_server(wallet: BitcoinWallet, days: int) -> tuple[str, str]:
     )
 
     create = _http_post_json(
-        f"{MOCK_SPORESTACK_URL}/token/{token}/servers",
+        f"{mock_sporestack_url}/token/{token}/servers",
         {
             "days": days,
             "flavor": "vps-1vcpu-1gb",
@@ -376,26 +458,29 @@ def buy_genesis_server(wallet: BitcoinWallet, days: int) -> tuple[str, str]:
 
 
 def start_genesis_orchestrator(machine_id: str, token: str, mnemonic: str,
-                               sink_address: str) -> None:
+                               sink_address: str, cfg: dict,
+                               mock_sporestack_url: str,
+                               event_api_key: str) -> None:
+    g = cfg["genesis"]
     env = {
-        "MYCELIUM_FRIENDLY_NAME": GENESIS_NAME,
-        "MYCELIUM_PARENT_NAME": GENESIS_NAME,
-        "MYCELIUM_LOG_SECRET": EVENT_API_KEY,
-        "MYCELIUM_SPORESTACK_TOKEN": token,
-        "MYCELIUM_CAUTION_TRAIT": "0.5",
-        "MYCELIUM_CAUTION_MUTATION_SIGMA": "0.05",
-        "MYCELIUM_SPAWN_THRESHOLD_DAYS": "60",
-        "MYCELIUM_SPAWN_RESERVE_DAYS": "30",
-        "MYCELIUM_INHERITANCE_RATIO": "0.4",
-        "MYCELIUM_DEFAULT_BTC_ADDRESS": sink_address,
+        "MYCELIUM_FRIENDLY_NAME":          GENESIS_NAME,
+        "MYCELIUM_PARENT_NAME":            GENESIS_NAME,
+        "MYCELIUM_LOG_SECRET":             event_api_key,
+        "MYCELIUM_SPORESTACK_TOKEN":       token,
+        "MYCELIUM_CAUTION_TRAIT":          str(g["caution_trait"]),
+        "MYCELIUM_CAUTION_MUTATION_SIGMA": str(g["caution_mutation_sigma"]),
+        "MYCELIUM_SPAWN_THRESHOLD_DAYS":   str(g["spawn_threshold_days"]),
+        "MYCELIUM_SPAWN_RESERVE_DAYS":     str(g["spawn_reserve_days"]),
+        "MYCELIUM_INHERITANCE_RATIO":      str(g["inheritance_ratio"]),
+        "MYCELIUM_DEFAULT_BTC_ADDRESS":    sink_address,
     }
     secrets = {
         "/root/data/btc_mnemonic_seed": mnemonic,
-        "/root/data/sporestack_token": token,
+        "/root/data/sporestack_token":  token,
     }
     _log("posting /sim/start to mock SporeStack...")
     _http_post_json(
-        f"{MOCK_SPORESTACK_URL}/sim/start/{machine_id}",
+        f"{mock_sporestack_url}/sim/start/{machine_id}",
         {"env": env, "secrets": secrets},
         timeout=60,
     )
@@ -422,41 +507,57 @@ def tail_genesis_logs(machine_id: str) -> None:
 
 
 def main() -> None:
+    cfg = load_config()
+
     parser = argparse.ArgumentParser(description="Run the mycelium offline sim end-to-end.")
-    parser.add_argument("--genesis-days", type=int, default=90,
-                        help="Initial SporeStack runway purchased for genesis (default 90)")
-    parser.add_argument("--genesis-btc", type=int, default=10,
-                        help="Regtest BTC to faucet into the genesis wallet (default 10)")
-    parser.add_argument("--time-scale", type=float, default=1000,
-                        help="Mock SporeStack time-scale multiplier (default 1000)")
+    parser.add_argument("--genesis-days", type=int, default=None,
+                        help=f"Initial SporeStack runway for genesis (default from config: {cfg['genesis']['days']})")
+    parser.add_argument("--genesis-btc", type=int, default=None,
+                        help=f"Regtest BTC to faucet into genesis wallet (default from config: {cfg['genesis']['initial_btc']})")
+    parser.add_argument("--time-scale", type=float, default=None,
+                        help=f"Mock SporeStack time-scale multiplier (default from config: {cfg['sporestack']['time_scale']})")
     parser.add_argument("--no-tail", action="store_true",
                         help="Skip the trailing `lxc exec ... tail -f` step")
     parser.add_argument("--rebuild-images", action="store_true",
                         help="Delete and rebuild LXC images before starting")
     args = parser.parse_args()
 
-    preflight()
-    start_btc_stack()
-    start_event_collector()
-    start_mock_sporestack(args.time_scale)
-    ensure_images(rebuild=args.rebuild_images)
-    launch_ipv8_bootstrap()
+    # CLI overrides win; config file is the default source of truth
+    if args.genesis_days is not None:
+        cfg["genesis"]["days"] = args.genesis_days
+    if args.genesis_btc is not None:
+        cfg["genesis"]["initial_btc"] = args.genesis_btc
+    if args.time_scale is not None:
+        cfg["sporestack"]["time_scale"] = args.time_scale
 
-    wallet, mnemonic = get_or_create_genesis_wallet()
+    net = cfg["network"]
+    event_collector_url = f"http://127.0.0.1:{net['event_collector_port']}"
+    mock_sporestack_url = f"http://127.0.0.1:{net['mock_sporestack_port']}"
+    event_api_key = "123456789"
+
+    preflight(cfg)
+    start_btc_stack(cfg)
+    start_event_collector(cfg)
+    start_mock_sporestack(cfg)
+    ensure_images(rebuild=args.rebuild_images)
+    launch_ipv8_bootstrap(cfg)
+
+    wallet, mnemonic = create_fresh_genesis_wallet()
     genesis_addr = wallet.get_receiving_address()
-    faucet_fund(genesis_addr, args.genesis_btc)
+    faucet_fund(genesis_addr, cfg["genesis"]["initial_btc"])
 
     sink_addr = fresh_regtest_sink_address()
     _log(f"failsafe sink address: {sink_addr}")
 
-    token, machine_id = buy_genesis_server(wallet, args.genesis_days)
-    start_genesis_orchestrator(machine_id, token, mnemonic, sink_addr)
+    token, machine_id = buy_genesis_server(wallet, cfg, mock_sporestack_url)
+    start_genesis_orchestrator(machine_id, token, mnemonic, sink_addr, cfg,
+                               mock_sporestack_url, event_api_key)
 
     print()
     _log(f"sim up. genesis machine_id={machine_id}")
     _log(f"  events:  {SIM_DIR / 'data' / 'events.jsonl'}")
-    _log(f"  mock:    {MOCK_SPORESTACK_URL}/healthz")
-    _log(f"  collect: {EVENT_COLLECTOR_URL}/healthz")
+    _log(f"  mock:    {mock_sporestack_url}/healthz")
+    _log(f"  collect: {event_collector_url}/healthz")
     print()
 
     if args.no_tail:

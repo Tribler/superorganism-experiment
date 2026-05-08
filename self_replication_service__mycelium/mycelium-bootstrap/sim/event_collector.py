@@ -2,18 +2,19 @@
 """HTTP collector for mycelium offline-sim events (TODO 8.7).
 
 Accepts POST /event payloads from each container's EventLogger and appends
-them as JSONL to sim/data/events.jsonl for the analysis layer (8.11).
 """
 import json
 import time
 import threading
 import pathlib
+from datetime import datetime
 
 from flask import Flask, request, jsonify
 
 BIND_HOST = "0.0.0.0"  # bind to lxdbr0 too so containers can POST events from the bridge
 BIND_PORT = 8765
-EVENTS_FILE = pathlib.Path(__file__).resolve().parent / "data" / "events.jsonl"
+_RUN_TS = datetime.now().strftime("%d/%m/%Y_%H:%M")
+EVENTS_FILE = pathlib.Path(__file__).resolve().parent / "data" / f"events-{_RUN_TS}.jsonl"
 # Matches what the bootstrapper writes to ~/.mycelium/log_secret and injects as
 # MYCELIUM_LOG_SECRET on every node. It's just a logging endpoint, not real auth.
 API_KEY = "123456789"

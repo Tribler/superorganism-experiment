@@ -67,6 +67,15 @@ EVENT_COLLECTOR_PORT = int(os.getenv("MYCELIUM_SIM_EVENT_COLLECTOR_PORT", "8765"
 IPV8_BOOTSTRAP_INSTANCE = os.getenv("MYCELIUM_SIM_BOOTSTRAP_INSTANCE", "ipv8-bootstrap")
 IPV8_BOOTSTRAP_PORT = int(os.getenv("MYCELIUM_SIM_BOOTSTRAP_PORT", "7759"))
 
+# Mycelium interval defaults injected into every spawned node.
+# These are set by run_simulation.py from sim_config.toml via env vars.
+_SIM_DECISION_INTERVAL      = os.getenv("MYCELIUM_SIM_DECISION_INTERVAL",      "30")
+_SIM_HEARTBEAT_INTERVAL     = os.getenv("MYCELIUM_SIM_HEARTBEAT_INTERVAL",      "5")
+_SIM_PEER_REGISTRY_TTL      = os.getenv("MYCELIUM_SIM_PEER_REGISTRY_TTL",       "30")
+_SIM_WHOAMI_BROADCAST       = os.getenv("MYCELIUM_SIM_WHOAMI_BROADCAST",         "2")
+_SIM_WHOAMI_GOSSIP_COOLDOWN = os.getenv("MYCELIUM_SIM_WHOAMI_GOSSIP_COOLDOWN",   "2")
+_SIM_UPDATE_CHECK_INTERVAL  = os.getenv("MYCELIUM_SIM_UPDATE_CHECK_INTERVAL",    "99999999")
+
 BTC_DATADIR = pathlib.Path.home() / ".mycelium-sim" / "regtest"
 BCLI = [
     "bitcoin-cli", "-regtest", f"-datadir={BTC_DATADIR}",
@@ -367,12 +376,12 @@ def _build_sim_env_lines(env: dict, secrets_in: dict, container_ipv4: str) -> st
     enriched.setdefault("MYCELIUM_LOG_ENDPOINT", f"http://{bridge_ip}:{EVENT_COLLECTOR_PORT}")
 
     # Sim-time interval overrides — mycelium's wall-clock intervals run unchanged
-    enriched.setdefault("MYCELIUM_DECISION_INTERVAL", "30")
-    enriched.setdefault("MYCELIUM_HEARTBEAT_INTERVAL", "5")
-    enriched.setdefault("MYCELIUM_PEER_REGISTRY_TTL", "30")
-    enriched.setdefault("MYCELIUM_WHOAMI_BROADCAST_INTERVAL", "2")
-    enriched.setdefault("MYCELIUM_WHOAMI_GOSSIP_COOLDOWN", "2")
-    enriched.setdefault("MYCELIUM_UPDATE_CHECK_INTERVAL", "99999999")
+    enriched.setdefault("MYCELIUM_DECISION_INTERVAL",         _SIM_DECISION_INTERVAL)
+    enriched.setdefault("MYCELIUM_HEARTBEAT_INTERVAL",        _SIM_HEARTBEAT_INTERVAL)
+    enriched.setdefault("MYCELIUM_PEER_REGISTRY_TTL",         _SIM_PEER_REGISTRY_TTL)
+    enriched.setdefault("MYCELIUM_WHOAMI_BROADCAST_INTERVAL", _SIM_WHOAMI_BROADCAST)
+    enriched.setdefault("MYCELIUM_WHOAMI_GOSSIP_COOLDOWN",    _SIM_WHOAMI_GOSSIP_COOLDOWN)
+    enriched.setdefault("MYCELIUM_UPDATE_CHECK_INTERVAL",     _SIM_UPDATE_CHECK_INTERVAL)
 
     providers = {
         "electrum_regtest": {

@@ -184,9 +184,15 @@ class SpendingWallet:
         if Config.SIM_MODE:
             # Sim issues many sends per minute; resync local UTXO table so coin
             # selection doesn't pick inputs already consumed by an earlier send.
+            # scan() (not just transactions_update) is required: after a prior
+            # send, the change tx sits in the local DB with block_height=None,
+            # and transactions_update_confirmations filters on block_height>0,
+            # so confirmations stay at 0 and select_inputs (min_confirms=1)
+            # finds nothing. scan() re-fetches each confs==0 tx by txid, which
+            # restores its block_height + confirmations from the indexer.
             try:
-                self._wallet.transactions_update()
-                self._wallet.utxos_update()
+                self._wallet.scan()
+                self._wallet.utxos_update(rescan_all=True)
             except Exception as e:
                 logger.warning("wallet refresh before send failed (continuing): %s", e)
 

@@ -1,0 +1,36 @@
+# Mycelium offline simulation — all configurable parameters.
+# Edit this file to tune the simulation without touching any Python.
+
+[btc]
+block_interval_s = 1          # seconds between auto-mined regtest blocks
+
+[sporestack]
+time_scale         = 2000     # speed-up factor (1000 → 30 sim-days ≈ 43 min real time)
+btc_usd            = 50000    # BTC/USD rate used for invoice pricing
+monthly_cost_cents = 3000     # cents per server per 30 sim-days
+invoice_lifetime_s = 600      # seconds an unpaid invoice stays open
+
+[genesis]
+days                   = 90   # SporeStack runway purchased at genesis
+initial_btc            = 0.1   # regtest BTC fauceted into genesis wallet each run
+caution_trait          = 0.5
+caution_mutation_sigma = 0.05
+spawn_threshold_days   = 60
+spawn_reserve_days     = 30
+inheritance_ratio      = 0.2
+
+[intervals]
+# Mycelium wall-clock intervals in seconds (applied to every spawned node).
+decision_interval         = 30
+heartbeat_interval        = 10
+peer_registry_ttl         = 120
+whoami_broadcast_interval = 30
+whoami_gossip_cooldown    = 30
+update_check_interval     = 99999999   # disabled in sim
+
+[network]
+lxc_bridge           = "lxdbr0"
+electrs_port         = 60401
+event_collector_port = 8765
+mock_sporestack_port = 8766
+ipv8_bootstrap_port  = 7759

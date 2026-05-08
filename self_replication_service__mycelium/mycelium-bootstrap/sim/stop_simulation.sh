@@ -4,15 +4,17 @@
 set -uo pipefail
 
 SIM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TS="$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="${SIM_DIR}/data/runs/${TS}"
-mkdir -p "${RUN_DIR}"
+RUNS_DIR="${SIM_DIR}/data/runs"
+mkdir -p "${RUNS_DIR}"
 
 # Archive events first — before kill, so an in-flight POST isn't lost.
-if [ -f "${SIM_DIR}/data/events.jsonl" ]; then
-    mv "${SIM_DIR}/data/events.jsonl" "${RUN_DIR}/events.jsonl"
-    echo "[stop_simulation] archived events to ${RUN_DIR}/events.jsonl"
-fi
+# event_collector.py writes one events-<ts>.jsonl per spinup; move each into runs/ flat.
+shopt -s nullglob
+for f in "${SIM_DIR}/data/"events-*.jsonl; do
+    mv "${f}" "${RUNS_DIR}/"
+    echo "[stop_simulation] archived $(basename "${f}") to ${RUNS_DIR}/"
+done
+shopt -u nullglob
 
 # Kill background processes (reverse startup order).
 pkill -f mock_sporestack.py     || true

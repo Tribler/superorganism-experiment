@@ -50,7 +50,7 @@ In a secondary terminals:
 #  curl -s http://127.0.0.1:8766/healthz | jq   # mock: tokens/servers/time_scale
   curl -s http://127.0.0.1:8765/healthz        # event collector
   lxc list                                      # m-<12hex> + ipv8-bootstrap
-  lxc exec m-3dfb682587fe -- cat /root/logs/orchestrator.log  # orchestrator logs
+  lxc exec   m-dee6666d4b6d -- cat /root/logs/orchestrator.log  # orchestrator logs
 ```
 
 Stop + delete everything:
