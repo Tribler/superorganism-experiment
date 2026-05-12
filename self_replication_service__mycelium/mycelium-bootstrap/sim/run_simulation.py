@@ -555,7 +555,7 @@ def main() -> None:
 
     print()
     _log(f"sim up. genesis machine_id={machine_id}")
-    _log(f"  events:  {SIM_DIR / 'data' / 'events.jsonl'}")
+    _log(f"  events:  {SIM_DIR / 'data'}/")
     _log(f"  mock:    {mock_sporestack_url}/healthz")
     _log(f"  collect: {event_collector_url}/healthz")
     print()

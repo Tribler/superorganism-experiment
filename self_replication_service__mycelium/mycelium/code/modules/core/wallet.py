@@ -89,6 +89,17 @@ if Config.SIM_MODE:
 
 _wallet_lock = threading.RLock()
 
+# Sim-mode retry knobs for the pre-send UTXO refresh. Host's _scan_until_funded
+# uses 20 attempts × 3s; we use a tighter cadence here because the parent's
+# tx is already in mempool by the time send() runs, so the relevant lag is
+# electrs's listunspent indexing, which is usually sub-second.
+_SIM_SEND_SCAN_ATTEMPTS = 20
+_SIM_SEND_SCAN_DELAY = 1.5
+# Mirrors spawn_identity._ESTIMATED_FEE_SAT_MAX — the conservative fee buffer
+# the caller's balance check already uses, kept in sync so we stop polling
+# once we have enough confirmed UTXOs to actually build the tx.
+_SIM_SEND_FEE_HEADROOM_SAT = 5_000
+
 
 def _synchronized(fn):
     @wraps(fn)
@@ -190,11 +201,57 @@ class SpendingWallet:
             # so confirmations stay at 0 and select_inputs (min_confirms=1)
             # finds nothing. scan() re-fetches each confs==0 tx by txid, which
             # restores its block_height + confirmations from the indexer.
-            try:
-                self._wallet.scan()
-                self._wallet.utxos_update(rescan_all=True)
-            except Exception as e:
-                logger.warning("wallet refresh before send failed (continuing): %s", e)
+            #
+            # Retry loop: electrs's address.listunspent can lag address.history
+            # by seconds-to-tens-of-seconds, so a single scan+update sometimes
+            # leaves utxos() empty even though balance() reports the funds.
+            # Mirror run_simulation._scan_until_funded — poll until we see
+            # confirmed UTXOs covering amount + fee headroom, or give up with
+            # a clear error.
+            needed = amount_satoshis + _SIM_SEND_FEE_HEADROOM_SAT
+            last_err: Optional[Exception] = None
+            for attempt in range(_SIM_SEND_SCAN_ATTEMPTS):
+                try:
+                    self._wallet.scan()
+                    self._wallet.utxos_update(rescan_all=True)
+                    utxos = self._wallet.utxos() or []
+                    spendable = sum(
+                        int(u.get("value", 0))
+                        for u in utxos
+                        if int(u.get("confirmations", 0)) >= 1
+                    )
+                    if spendable >= needed:
+                        if attempt > 0:
+                            logger.info(
+                                "wallet ready after %d scan(s): %d confirmed utxo(s), %d sat spendable",
+                                attempt + 1,
+                                sum(1 for u in utxos if int(u.get("confirmations", 0)) >= 1),
+                                spendable,
+                            )
+                        break
+                    logger.info(
+                        "wallet has %d utxo(s), %d sat spendable (< %d needed); scan %d/%d, retrying in %.1fs...",
+                        len(utxos), spendable, needed,
+                        attempt + 1, _SIM_SEND_SCAN_ATTEMPTS, _SIM_SEND_SCAN_DELAY,
+                    )
+                except Exception as e:
+                    last_err = e
+                    logger.warning(
+                        "wallet refresh before send failed on attempt %d/%d: %s",
+                        attempt + 1, _SIM_SEND_SCAN_ATTEMPTS, e,
+                    )
+                if attempt < _SIM_SEND_SCAN_ATTEMPTS - 1:
+                    time.sleep(_SIM_SEND_SCAN_DELAY)
+            else:
+                # Loop exhausted without break — surface a clear error instead
+                # of letting send_to raise bitcoinlib's misleading
+                # "no key available for UTXO's" message.
+                detail = f" (last error: {last_err})" if last_err else ""
+                raise WalletError(
+                    f"No spendable UTXOs covering {needed} sat after "
+                    f"{_SIM_SEND_SCAN_ATTEMPTS} scan attempts — electrs may be "
+                    f"stalled or mempool tx unmined{detail}"
+                )
 
         balance = self.get_balance_satoshis()
         if balance < amount_satoshis:

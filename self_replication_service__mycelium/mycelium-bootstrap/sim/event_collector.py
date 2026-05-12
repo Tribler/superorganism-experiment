@@ -13,8 +13,8 @@ from flask import Flask, request, jsonify
 
 BIND_HOST = "0.0.0.0"  # bind to lxdbr0 too so containers can POST events from the bridge
 BIND_PORT = 8765
-_RUN_TS = datetime.now().strftime("%d/%m/%Y_%H:%M")
-EVENTS_FILE = pathlib.Path(__file__).resolve().parent / "data" / f"events-{_RUN_TS}.jsonl"
+_RUN_TS = datetime.now().strftime("%d-%m-%Y-%H:%M")
+EVENTS_FILE = pathlib.Path(__file__).resolve().parent / "data" / f"{_RUN_TS}.jsonl"
 # Matches what the bootstrapper writes to ~/.mycelium/log_secret and injects as
 # MYCELIUM_LOG_SECRET on every node. It's just a logging endpoint, not real auth.
 API_KEY = "123456789"
