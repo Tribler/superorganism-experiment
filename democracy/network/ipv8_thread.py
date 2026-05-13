@@ -4,25 +4,29 @@ import asyncio
 import os
 from collections import deque
 from pathlib import Path
-from typing import Deque, Optional, Tuple, Union
+from typing import Deque, Optional, Union
 from uuid import UUID
 
 from PySide6.QtCore import QThread, Signal, Slot
 
-from ipv8.configuration import ConfigBuilder, default_bootstrap_defs, Strategy, WalkerDefinition
+from ipv8.configuration import (
+    ConfigBuilder,
+    default_bootstrap_defs,
+    Strategy,
+    WalkerDefinition,
+)
 from ipv8_service import IPv8
 
-from config import DATA_PATH
-from democracy.models.solution import Solution
-from democracy.models.solution_vote import SolutionVote
-from democracy.network.communities.democracy_community import DemocracyCommunity
 from democracy.models.issue import Issue
 from democracy.models.issue_vote import IssueVote
+from democracy.models.solution import Solution
+from democracy.models.solution_vote import SolutionVote
+from democracy.network.community import DemocracyCommunity
+from democracy.network.community_settings import DemocracyCommunitySettings
 from democracy.storage.repository import DemocracySyncRepository
 from democracy.storage.repository_factory import DemocracyRepositoryFactory
 
-
-QueuedItem = Tuple[str, Union[Issue, IssueVote, Solution, SolutionVote]]
+QueuedModel = Union[Issue, IssueVote, Solution, SolutionVote]
 
 
 class IPv8Thread(QThread):
@@ -32,25 +36,31 @@ class IPv8Thread(QThread):
       - GUI -> Thread: broadcastIssue(Issue), broadcastVote(Vote)
       - Thread -> GUI: dataChanged(), startedOk(), error(str)
     """
+
     dataChanged = Signal()
     startedOk = Signal()
     error = Signal(str)
 
     # GUI -> worker signals
-    broadcastIssue = Signal(object)         # Issue
-    broadcastIssueVote = Signal(object)     # Issue vote
-    broadcastSolution = Signal(object)      # Solution
+    broadcastIssue = Signal(object)  # Issue
+    broadcastIssueVote = Signal(object)  # Issue vote
+    broadcastSolution = Signal(object)  # Solution
     broadcastSolutionVote = Signal(object)  # Solution vote
 
     def __init__(
         self,
         user_id: UUID,
         repository_factory: DemocracyRepositoryFactory,
+        *,
+        data_path: str | Path,
+        communication_interval: float,
         parent=None,
     ):
         super().__init__(parent)
         self._user_id = user_id
         self._repository_factory = repository_factory
+        self._data_path = Path(data_path)
+        self._communication_interval = communication_interval
         self._repository: Optional[DemocracySyncRepository] = None
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -58,7 +68,7 @@ class IPv8Thread(QThread):
         self._overlay: Optional[DemocracyCommunity] = None
 
         # Queue broadcasts that arrive before overlay is ready
-        self._pending: Deque[QueuedItem] = deque()
+        self._pending: Deque[QueuedModel] = deque()
 
         # Ensure GUI signals connect to thread slots via queued connection
         self.broadcastIssue.connect(self._on_broadcast_issue)
@@ -97,7 +107,9 @@ class IPv8Thread(QThread):
                 pending = asyncio.all_tasks(loop=self._loop)
                 for t in pending:
                     t.cancel()
-                self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                self._loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
             except Exception:
                 pass
             if self._repository is not None:
@@ -131,9 +143,11 @@ class IPv8Thread(QThread):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         self._repository = self._repository_factory.create_sync_repository()
 
-        keys_path = Path(DATA_PATH) / "democracy" / "keys"
+        keys_path = self._data_path / "democracy" / "keys"
         os.makedirs(keys_path, exist_ok=True)
-        builder.add_key("my peer", "curve25519", f"{keys_path}/{str(self._user_id)}.pem")
+        builder.add_key(
+            "my peer", "curve25519", f"{keys_path}/{str(self._user_id)}.pem"
+        )
 
         # Thread -> GUI callback: just emit signal; GUI will refresh (coalesced)
         def _data_changed_callback() -> None:
@@ -144,38 +158,35 @@ class IPv8Thread(QThread):
             key_alias="my peer",
             walkers=[WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})],
             bootstrappers=default_bootstrap_defs,
-            initialize={
-                "repository": self._repository,
-                "data_changed": _data_changed_callback,
-            },
+            initialize=DemocracyCommunitySettings.initialize_args(
+                repository=self._repository,
+                data_changed=_data_changed_callback,
+                communication_interval=self._communication_interval,
+            ),
             on_start=[("on_start",)],
         )
 
-        self._ipv8 = IPv8(builder.finalize(), extra_communities={"DemocracyCommunity": DemocracyCommunity})
+        self._ipv8 = IPv8(
+            builder.finalize(),
+            extra_communities={"DemocracyCommunity": DemocracyCommunity},
+        )
         await self._ipv8.start()
 
-        overlay = next(o for o in self._ipv8.overlays if isinstance(o, DemocracyCommunity))
+        overlay = next(
+            o for o in self._ipv8.overlays if isinstance(o, DemocracyCommunity)
+        )
         return overlay
 
     async def _flush_pending(self) -> None:
         """
-        Flush queued broadcasts in order once overlay is ready.
+        Flush queued creator-side broadcasts in order once overlay is ready.
         Runs in the worker thread's asyncio loop.
         """
         if self._overlay is None:
             return
 
         while self._pending:
-            kind, payload = self._pending.popleft()
-
-            if kind == "issue":
-                self._overlay.on_create_issue(payload)  # type: ignore[arg-type]
-            elif kind == "issue_vote":
-                self._overlay.on_issue_vote(payload)  # type: ignore[arg-type]
-            elif kind == "solution":
-                self._overlay.on_create_solution(payload)  # type: ignore[arg-type]
-            elif kind == "solution_vote":
-                self._overlay.on_solution_vote(payload)  # type: ignore[arg-type]
+            self._overlay.broadcast_created_model(self._pending.popleft())
 
         # After applying queued actions, signal the GUI to refresh once (coalesced on UI side)
         self.dataChanged.emit()
@@ -195,10 +206,10 @@ class IPv8Thread(QThread):
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("issue", issue))
+                self._pending.append(issue)
                 return
 
-            self._overlay.on_create_issue(issue)
+            self._overlay.broadcast_created_model(issue)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
 
@@ -209,10 +220,10 @@ class IPv8Thread(QThread):
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("issue_vote", vote))
+                self._pending.append(vote)
                 return
 
-            self._overlay.on_issue_vote(vote)
+            self._overlay.broadcast_created_model(vote)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
 
@@ -223,10 +234,10 @@ class IPv8Thread(QThread):
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("solution", solution))
+                self._pending.append(solution)
                 return
 
-            self._overlay.on_create_solution(solution)
+            self._overlay.broadcast_created_model(solution)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)
 
@@ -237,9 +248,9 @@ class IPv8Thread(QThread):
 
         async def _do() -> None:
             if self._overlay is None:
-                self._pending.append(("solution_vote", vote))
+                self._pending.append(vote)
                 return
 
-            self._overlay.on_solution_vote(vote)
+            self._overlay.broadcast_created_model(vote)
 
         asyncio.run_coroutine_threadsafe(_do(), self._loop)

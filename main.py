@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent / "torrent_health_and_investment"))
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from config import DATA_PATH
+from config import COMMUNICATION_INTERVAL, DATA_PATH
 from democracy.democracy_service import DemocracyService
 from democracy.event_publisher import DemocracyEventPublisher
 from democracy.models.person import Person
@@ -136,7 +136,12 @@ def main() -> None:
     )
 
     # Start IPv8 in QThread
-    worker = IPv8Thread(user.id, repository_factory)
+    worker = IPv8Thread(
+        user.id,
+        repository_factory,
+        data_path=DATA_PATH,
+        communication_interval=COMMUNICATION_INTERVAL,
+    )
     publisher.attach_worker(worker)
     worker.dataChanged.connect(
         window.schedule_refresh, type=Qt.ConnectionType.QueuedConnection
