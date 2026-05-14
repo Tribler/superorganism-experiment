@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from authentication.bitcoin.txid import validate_txid
+from bitcoin.txid import validate_txid
 from authentication.identity.ed25519_identity_generator import (
     Ed25519IdentityGenerator,
     IdentityGenerator,

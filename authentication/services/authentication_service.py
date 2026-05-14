@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timezone
 
-from authentication.bitcoin.txid import validate_txid
+from bitcoin.txid import validate_txid
 from authentication.constants import (
     AUTHENTICATION_PROTOCOL_LABEL,
 )

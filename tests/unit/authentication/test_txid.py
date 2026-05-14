@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from authentication.bitcoin.txid import validate_txid
+from bitcoin.txid import validate_txid
 
 
 def test_validate_txid_returns_trimmed_txid_for_valid_value() -> None:

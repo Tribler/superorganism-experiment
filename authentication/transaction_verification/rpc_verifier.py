@@ -3,18 +3,14 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from authentication.bitcoin.rpc_errors import BitcoinRpcErrorCode
+from bitcoin.rpc_errors import BitcoinRpcError, BitcoinRpcErrorCode
 from authentication.transaction_verification.exceptions import TransactionFetchError
 from authentication.transaction_verification.models import (
     NormalizedTransaction,
     NormalizedTxOutput,
 )
 from authentication.transaction_verification.base_verifier import BaseVerifier
-from authentication.bitcoin.rpc_client import (
-    BitcoinRpcClient,
-    BitcoinRpcConfig,
-    BitcoinRpcError,
-)
+from bitcoin.rpc_client import BitcoinRpcClient, BitcoinRpcConfig
 
 
 class RpcVerifier(BaseVerifier):

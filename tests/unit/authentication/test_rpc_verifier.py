@@ -4,8 +4,7 @@ from typing import Any
 
 import pytest
 
-from authentication.bitcoin.rpc_errors import BitcoinRpcErrorCode
-from authentication.bitcoin.rpc_client import BitcoinRpcError
+from bitcoin.rpc_errors import BitcoinRpcError, BitcoinRpcErrorCode
 from authentication.transaction_verification.exceptions import TransactionFetchError
 from authentication.transaction_verification.models import NormalizedTxOutput
 from authentication.transaction_verification.rpc_verifier import RpcVerifier

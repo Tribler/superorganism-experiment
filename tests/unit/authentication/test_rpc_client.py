@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from authentication.bitcoin.rpc_client import BitcoinRpcClient, BitcoinRpcConfig
-from authentication.bitcoin.rpc_errors import BitcoinRpcError
+from bitcoin.rpc_client import BitcoinRpcClient, BitcoinRpcConfig
+from bitcoin.rpc_errors import BitcoinRpcError
 
 
 # =========================================================

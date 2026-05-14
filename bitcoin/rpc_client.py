@@ -8,8 +8,8 @@ from urllib.parse import quote
 
 import httpx
 
-from authentication.bitcoin.rpc_errors import BitcoinRpcError
-from authentication.bitcoin.txid import validate_txid
+from bitcoin.rpc_errors import BitcoinRpcError
+from bitcoin.txid import validate_txid
 
 SATOSHIS_PER_BTC = Decimal("100000000")
 
