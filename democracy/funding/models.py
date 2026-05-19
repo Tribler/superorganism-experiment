@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from bitcoin.utils import validate_raw_tx_hex, validate_txid
+from bitcoin.utils import validate_psbt_base64, validate_txid
 from democracy.constants import FUNDING_PROTOCOL_LABEL
 
 
@@ -86,10 +86,9 @@ class FundingPledge:
     """
     Immutable funding pledge created by a pledger for a campaign.
 
-    A funding pledge links a pledger to a specific campaign and records the signed Bitcoin
-    transaction output that represents the pledged funds. The transaction ID and signed
-    transaction hex are validated during initialization, and the pledged value and output
-    index must be valid.
+    A funding pledge links a pledger to a specific campaign and records the signed PSBT
+    that represents the pledged funds. The transaction ID and signed PSBT are validated
+    during initialization, and the pledged value and output index must be valid.
     """
 
     campaign_id: UUID
@@ -97,7 +96,7 @@ class FundingPledge:
     txid: str
     vout: int
     value_sats: int
-    signed_pledge_tx_hex: str
+    signed_pledge_psbt: str
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -105,8 +104,8 @@ class FundingPledge:
         object.__setattr__(self, "txid", validate_txid(self.txid))
         object.__setattr__(
             self,
-            "signed_pledge_tx_hex",
-            validate_raw_tx_hex(self.signed_pledge_tx_hex),
+            "signed_pledge_psbt",
+            validate_psbt_base64(self.signed_pledge_psbt),
         )
 
         if self.value_sats <= 0:

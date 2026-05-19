@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from bitcoin.txid import validate_txid
+from bitcoin.utils import validate_txid
 from authentication.identity.models import ApplicationIdentity
 from authentication.models.registration_models import (
     RegistrationResult,

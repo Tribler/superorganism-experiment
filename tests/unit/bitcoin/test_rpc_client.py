@@ -662,6 +662,346 @@ def test_create_raw_transaction_rejects_non_string_result() -> None:
 
 
 # =========================================================
+# create_psbt()
+# =========================================================
+def test_create_psbt_rejects_non_list_inputs() -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="inputs must be a list"):
+            client.create_psbt(
+                inputs={"txid": "ab" * 32, "vout": 0},  # type: ignore[arg-type]
+                outputs=[],
+            )
+    finally:
+        client.close()
+
+
+def test_create_psbt_rejects_non_list_outputs() -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="outputs must be a list"):
+            client.create_psbt(
+                inputs=[],
+                outputs={"bcrt1qdest": 0.1},  # type: ignore[arg-type]
+            )
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("locktime", [True, "0"])
+def test_create_psbt_rejects_non_integer_locktime(locktime: object) -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="locktime must be an integer"):
+            client.create_psbt(
+                inputs=[],
+                outputs=[],
+                locktime=locktime,  # type: ignore[arg-type]
+            )
+    finally:
+        client.close()
+
+
+def test_create_psbt_rejects_negative_locktime() -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="locktime must be non-negative"):
+            client.create_psbt(
+                inputs=[],
+                outputs=[],
+                locktime=-1,
+            )
+    finally:
+        client.close()
+
+
+def test_create_psbt_rejects_non_boolean_replaceable() -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="replaceable must be a bool"):
+            client.create_psbt(
+                inputs=[],
+                outputs=[],
+                replaceable="false",  # type: ignore[arg-type]
+            )
+    finally:
+        client.close()
+
+
+def test_create_psbt_rejects_non_string_result() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": {"psbt": "cHNidP8BAAoCAAAAAQ=="},
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="createpsbt returned a non-string result",
+        ):
+            client.create_psbt(inputs=[], outputs=[])
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("psbt", ["", "   "])
+def test_create_psbt_rejects_empty_string_result(psbt: str) -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": psbt,
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="createpsbt returned an empty PSBT string",
+        ):
+            client.create_psbt(inputs=[], outputs=[])
+    finally:
+        client.close()
+
+
+def test_create_psbt_rejects_non_base64_result() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": "not-base64!",
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="createpsbt returned a non-base64 PSBT string",
+        ):
+            client.create_psbt(inputs=[], outputs=[])
+    finally:
+        client.close()
+
+
+def test_create_psbt_returns_trimmed_base64_psbt() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": "  cHNidP8BAAoCAAAAAQ==  ",
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        result = client.create_psbt(inputs=[], outputs=[])
+    finally:
+        client.close()
+
+    assert result == "cHNidP8BAAoCAAAAAQ=="
+
+
+# =========================================================
+# finalize_psbt()
+# =========================================================
+@pytest.mark.parametrize("psbt_base64", [123, None, "", "   ", "not-base64!"])
+def test_finalize_psbt_rejects_invalid_psbt_base64(psbt_base64: object) -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="psbt_base64 must"):
+            client.finalize_psbt(psbt_base64)  # type: ignore[arg-type]
+    finally:
+        client.close()
+
+
+def test_finalize_psbt_rejects_non_boolean_extract() -> None:
+    client = BitcoinRpcClient(httpx.Client(), "http://localhost:18443")
+
+    try:
+        with pytest.raises(ValueError, match="extract must be a bool"):
+            client.finalize_psbt("cHNidP8BAAoCAAAAAQ==", extract="true")  # type: ignore[arg-type]
+    finally:
+        client.close()
+
+
+def test_finalize_psbt_rejects_non_dict_result() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={"jsonrpc": "1.0", "id": 1, "result": "nope", "error": None},
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="finalizepsbt returned a non-dict result"):
+            client.finalize_psbt("cHNidP8BAAoCAAAAAQ==")
+    finally:
+        client.close()
+
+
+# =========================================================
+# finalize_psbt_extract_tx_hex()
+# =========================================================
+def test_finalize_psbt_extract_tx_hex_rejects_non_bool_complete_flag() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": {"complete": "yes", "hex": "deadbeef"},
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="finalizepsbt returned a non-bool complete flag",
+        ):
+            client.finalize_psbt_extract_tx_hex("cHNidP8BAAoCAAAAAQ==")
+    finally:
+        client.close()
+
+
+def test_finalize_psbt_extract_tx_hex_rejects_incomplete_psbt() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": {"complete": False},
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="finalizepsbt returned an incomplete PSBT",
+        ):
+            client.finalize_psbt_extract_tx_hex("cHNidP8BAAoCAAAAAQ==")
+    finally:
+        client.close()
+
+
+def test_finalize_psbt_extract_tx_hex_rejects_non_string_hex_result() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": {"complete": True, "hex": 123},
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="finalizepsbt returned a non-string hex result",
+        ):
+            client.finalize_psbt_extract_tx_hex("cHNidP8BAAoCAAAAAQ==")
+    finally:
+        client.close()
+
+
+def test_finalize_psbt_extract_tx_hex_returns_trimmed_hex() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            request=request,
+            json={
+                "jsonrpc": "1.0",
+                "id": 1,
+                "result": {"complete": True, "hex": "  deadbeef  "},
+                "error": None,
+            },
+        )
+    )
+    client = BitcoinRpcClient(
+        httpx.Client(transport=transport),
+        "http://localhost:18443",
+    )
+
+    try:
+        result = client.finalize_psbt_extract_tx_hex("cHNidP8BAAoCAAAAAQ==")
+    finally:
+        client.close()
+
+    assert result == "deadbeef"
+
+
+# =========================================================
 # decode_raw_transaction()
 # =========================================================
 @pytest.mark.parametrize("raw_tx_hex", [123, None, "", "   ", "zz"])

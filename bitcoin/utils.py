@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
+
 from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 SATOSHIS_PER_BTC = Decimal("100000000")
@@ -55,6 +58,31 @@ def validate_raw_tx_hex(raw_tx_hex: str) -> str:
         bytes.fromhex(normalized)
     except ValueError as exc:
         raise ValueError("raw_tx_hex must be a hexadecimal string.") from exc
+
+    return normalized
+
+
+def validate_psbt_base64(psbt_base64: str) -> str:
+    """
+    Validate a base64-encoded PSBT string.
+
+    The returned value is trimmed of surrounding whitespace.
+
+    :param psbt_base64: PSBT base64 string.
+    :returns: Normalized PSBT base64 string.
+    :raises ValueError: If the value is not a valid non-empty base64 string.
+    """
+    if not isinstance(psbt_base64, str):
+        raise ValueError("psbt_base64 must be a string.")
+
+    normalized = psbt_base64.strip()
+    if not normalized:
+        raise ValueError("psbt_base64 must not be empty.")
+
+    try:
+        base64.b64decode(normalized, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("psbt_base64 must be a base64 string.") from exc
 
     return normalized
 

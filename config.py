@@ -5,6 +5,7 @@ from bitcoin.rpc_client import BitcoinRpcConfig
 DATA_PATH: Final[str] = ".data/"
 COMMUNICATION_INTERVAL: Final[float] = 60.0 # Seconds
 UI_REFRESH_DELAY: Final[int] = 100 # Milliseconds
+FUNDING_MIN_CONFIRMATIONS: Final[int] = 1
 
 REGTEST_RPC_CONFIG = BitcoinRpcConfig(
     rpc_url="http://127.0.0.1:18443",

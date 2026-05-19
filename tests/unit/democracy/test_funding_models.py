@@ -101,18 +101,18 @@ def test_compute_campaign_commitment_hex_rejects_empty_network_id() -> None:
 # =========================================================
 # FundingPledge
 # =========================================================
-def test_funding_pledge_normalizes_txid_and_signed_tx_hex() -> None:
+def test_funding_pledge_normalizes_txid_and_signed_pledge_psbt() -> None:
     pledge = FundingPledge(
         campaign_id=UUID("00000000-0000-0000-0000-000000000001"),
         pledger_id=UUID("00000000-0000-0000-0000-000000000002"),
         txid=f"  {'ab' * 32}  ",
         vout=0,
         value_sats=1,
-        signed_pledge_tx_hex="  deadbeef  ",
+        signed_pledge_psbt="  cHNidP8BAAoCAAAAAQ==  ",
     )
 
     assert pledge.txid == "ab" * 32
-    assert pledge.signed_pledge_tx_hex == "deadbeef"
+    assert pledge.signed_pledge_psbt == "cHNidP8BAAoCAAAAAQ=="
 
 
 @pytest.mark.parametrize("txid", ["", "   ", "ab", "g" * 64])
@@ -124,20 +124,20 @@ def test_funding_pledge_rejects_invalid_txid(txid: str) -> None:
             txid=txid,
             vout=0,
             value_sats=1,
-            signed_pledge_tx_hex="deadbeef",
+            signed_pledge_psbt="cHNidP8BAAoCAAAAAQ==",
         )
 
 
-@pytest.mark.parametrize("signed_pledge_tx_hex", ["", "   ", "zz", "not-hex"])
-def test_funding_pledge_rejects_invalid_signed_pledge_tx_hex(
-    signed_pledge_tx_hex: str,
+@pytest.mark.parametrize("signed_pledge_psbt", ["", "   ", "zz", "not-base64!"])
+def test_funding_pledge_rejects_invalid_signed_pledge_psbt(
+    signed_pledge_psbt: str,
 ) -> None:
-    with pytest.raises(ValueError, match="raw_tx_hex"):
+    with pytest.raises(ValueError, match="psbt_base64"):
         FundingPledge(
             campaign_id=UUID("00000000-0000-0000-0000-000000000001"),
             pledger_id=UUID("00000000-0000-0000-0000-000000000002"),
             txid="ab" * 32,
             vout=0,
             value_sats=1,
-            signed_pledge_tx_hex=signed_pledge_tx_hex,
+            signed_pledge_psbt=signed_pledge_psbt,
         )

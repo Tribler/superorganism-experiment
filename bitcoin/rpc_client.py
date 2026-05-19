@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
+
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any
@@ -8,7 +11,7 @@ from urllib.parse import quote
 import httpx
 
 from bitcoin.rpc_errors import BitcoinRpcError
-from bitcoin.utils import validate_raw_tx_hex, validate_txid
+from bitcoin.utils import validate_psbt_base64, validate_raw_tx_hex, validate_txid
 
 
 @dataclass(frozen=True)
@@ -338,6 +341,106 @@ class BitcoinRpcClient:
         if not isinstance(result, str):
             raise ValueError("createrawtransaction returned a non-string result.")
         return result
+
+    def create_psbt(
+        self,
+        inputs: list[dict[str, Any]],
+        outputs: list[dict[str, Any]],
+        locktime: int = 0,
+        replaceable: bool = True,
+    ) -> str:
+        """
+        Create an unsigned PSBT.
+
+        Validates the transaction inputs, outputs, locktime, and replaceability flag
+        before calling the createpsbt RPC method.
+
+        :param inputs: Transaction inputs in Bitcoin Core RPC format.
+        :param outputs: Transaction outputs in Bitcoin Core RPC format.
+        :param locktime: Transaction locktime. Must be a non-negative integer.
+        :param replaceable: Whether the transaction should signal BIP125 replaceability.
+        :returns: The PSBT as a base64-encoded string.
+        :raises ValueError: If arguments are invalid or the RPC returns an invalid PSBT
+                            string.
+        :raises BitcoinRpcError: If the underlying RPC call fails.
+        """
+        if not isinstance(inputs, list):
+            raise ValueError("inputs must be a list.")
+        if not isinstance(outputs, list):
+            raise ValueError("outputs must be a list.")
+        if isinstance(locktime, bool) or not isinstance(locktime, int):
+            raise ValueError("locktime must be an integer.")
+        if locktime < 0:
+            raise ValueError("locktime must be non-negative.")
+        if not isinstance(replaceable, bool):
+            raise ValueError("replaceable must be a bool.")
+
+        result = self.call(
+            "createpsbt",
+            inputs,
+            outputs,
+            locktime,
+            replaceable,
+        )
+        if not isinstance(result, str):
+            raise ValueError("createpsbt returned a non-string result.")
+
+        normalized = result.strip()
+        if not normalized:
+            raise ValueError("createpsbt returned an empty PSBT string.")
+
+        try:
+            base64.b64decode(normalized, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("createpsbt returned a non-base64 PSBT string.") from exc
+
+        return normalized
+
+    def finalize_psbt(self, psbt_base64: str, extract: bool = True) -> dict[str, Any]:
+        """
+        Finalize a PSBT.
+
+        Validates the PSBT base64 string and extract flag before calling the finalizepsbt
+        RPC method.
+
+        :param psbt_base64: The base64-encoded PSBT to finalize.
+        :param extract: Whether to extract the fully signed transaction hex when complete.
+        :returns: The finalizepsbt RPC result object.
+        :raises ValueError: If arguments are invalid or the RPC returns a non-dict result.
+        :raises BitcoinRpcError: If the underlying RPC call fails.
+        """
+        psbt_base64 = validate_psbt_base64(psbt_base64)
+        if not isinstance(extract, bool):
+            raise ValueError("extract must be a bool.")
+
+        result = self.call("finalizepsbt", psbt_base64, extract)
+        if not isinstance(result, dict):
+            raise ValueError("finalizepsbt returned a non-dict result.")
+        return result
+
+    def finalize_psbt_extract_tx_hex(self, psbt_base64: str) -> str:
+        """
+        Finalize a PSBT and return the extracted transaction hex.
+
+        :param psbt_base64: The base64-encoded PSBT to finalize.
+        :returns: The finalized raw transaction hex.
+        :raises ValueError: If the PSBT is incomplete or the RPC result does not contain a
+                            valid transaction hex.
+        :raises BitcoinRpcError: If the underlying RPC call fails.
+        """
+        result = self.finalize_psbt(psbt_base64, extract=True)
+
+        complete = result.get("complete")
+        if not isinstance(complete, bool):
+            raise ValueError("finalizepsbt returned a non-bool complete flag.")
+        if not complete:
+            raise ValueError("finalizepsbt returned an incomplete PSBT.")
+
+        tx_hex = result.get("hex")
+        if not isinstance(tx_hex, str):
+            raise ValueError("finalizepsbt returned a non-string hex result.")
+
+        return validate_raw_tx_hex(tx_hex)
 
     def decode_raw_transaction(self, raw_tx_hex: str) -> dict[str, Any]:
         """

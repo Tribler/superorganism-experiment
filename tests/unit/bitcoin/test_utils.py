@@ -59,6 +59,33 @@ def test_validate_raw_tx_hex_rejects_non_hex_input(raw_tx_hex: str) -> None:
 
 
 # =========================================================
+# validate_psbt_base64()
+# =========================================================
+def test_validate_psbt_base64_returns_trimmed_base64_for_valid_value() -> None:
+    psbt_base64 = "cHNidP8BAAoCAAAAAQ=="
+
+    assert validate_psbt_base64(f"  {psbt_base64}  ") == psbt_base64
+
+
+@pytest.mark.parametrize("psbt_base64", [123, None])
+def test_validate_psbt_base64_rejects_non_string_input(psbt_base64: object) -> None:
+    with pytest.raises(ValueError, match="psbt_base64 must be a string"):
+        validate_psbt_base64(psbt_base64)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("psbt_base64", ["", "   "])
+def test_validate_psbt_base64_rejects_empty_input(psbt_base64: str) -> None:
+    with pytest.raises(ValueError, match="psbt_base64 must not be empty"):
+        validate_psbt_base64(psbt_base64)
+
+
+@pytest.mark.parametrize("psbt_base64", ["zz", "not-base64!", "ab==?"])
+def test_validate_psbt_base64_rejects_non_base64_input(psbt_base64: str) -> None:
+    with pytest.raises(ValueError, match="psbt_base64 must be a base64 string"):
+        validate_psbt_base64(psbt_base64)
+
+
+# =========================================================
 # sats_to_btc_string()
 # =========================================================
 def test_sats_to_btc_string_returns_expected_btc_string_for_valid_amount() -> None:

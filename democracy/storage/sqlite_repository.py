@@ -152,7 +152,7 @@ class SQLiteDemocracyRepository(DemocracyRepository):
                     txid TEXT NOT NULL,
                     vout INTEGER NOT NULL,
                     value_sats INTEGER NOT NULL,
-                    signed_pledge_tx_hex TEXT NOT NULL,
+                    signed_pledge_psbt TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                 
                     FOREIGN KEY (campaign_id)
@@ -1057,7 +1057,7 @@ class SQLiteDemocracyRepository(DemocracyRepository):
                     txid,
                     vout,
                     value_sats,
-                    signed_pledge_tx_hex,
+                    signed_pledge_psbt,
                     created_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
@@ -1069,7 +1069,7 @@ class SQLiteDemocracyRepository(DemocracyRepository):
                     pledge.txid,
                     pledge.vout,
                     pledge.value_sats,
-                    pledge.signed_pledge_tx_hex,
+                    pledge.signed_pledge_psbt,
                     self._datetime_to_storage(pledge.created_at),
                 ),
             )
@@ -1237,7 +1237,7 @@ class SQLiteDemocracyRepository(DemocracyRepository):
             txid=row["txid"],
             vout=int(row["vout"]),
             value_sats=int(row["value_sats"]),
-            signed_pledge_tx_hex=row["signed_pledge_tx_hex"],
+            signed_pledge_psbt=row["signed_pledge_psbt"],
             created_at=SQLiteDemocracyRepository._datetime_from_storage(
                 row["created_at"]
             ),
