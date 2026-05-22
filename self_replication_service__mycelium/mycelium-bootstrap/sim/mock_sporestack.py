@@ -30,7 +30,13 @@ Time-scaling - MYCELIUM_SIM_TIME_SCALE (default 1000):
     server lives 40 minutes at TIME_SCALE=1000).
   - /servers/{m} returns `expiration` projected forward by TIME_SCALE so
     node_monitor's unmodified `(expiration - now)/86400` reads sim-days.
-  - balance_cents decays at the production cents/day rate against sim-elapsed time.
+
+Monthly autorenew billing (matches real SporeStack):
+  - /servers/launch debits monthly_cost * days / 30 from the token.
+  - Invoice payments only credit the token; they do NOT extend any server.
+  - The reaper loop also runs autorenew: at expiration, if the token covers
+    monthly_cost, debit it and extend by 30 sim-days; otherwise kill the
+    container. Result: topup fires once per sim-month, not every sim-day.
 """
 import base64
 import json
@@ -42,8 +48,11 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from flask import Flask, Response, jsonify, request
@@ -59,6 +68,10 @@ MONTHLY_COST_CENTS = int(os.getenv("MYCELIUM_SIM_MONTHLY_COST_CENTS", "3000"))
 INVOICE_LIFETIME_S = int(os.getenv("MYCELIUM_SIM_INVOICE_LIFETIME_S", "600"))
 INVOICE_POLL_INTERVAL_S = float(os.getenv("MYCELIUM_SIM_INVOICE_POLL_S", "3"))
 LXC_PROVISION_TIMEOUT_S = float(os.getenv("MYCELIUM_SIM_LXC_PROVISION_TIMEOUT_S", "30"))
+EXPIRY_REAPER_INTERVAL_S = float(os.getenv("MYCELIUM_SIM_EXPIRY_REAPER_S", "5"))
+
+LOG_ENDPOINT = os.getenv("MYCELIUM_LOG_ENDPOINT", "").rstrip("/")
+LOG_SECRET = os.getenv("MYCELIUM_LOG_SECRET", "")
 
 LXC_BASE_IMAGE = os.getenv("MYCELIUM_SIM_LXC_BASE_IMAGE", "mycelium-base")
 LXC_BRIDGE_NAME = os.getenv("MYCELIUM_SIM_LXC_BRIDGE", "lxdbr0")
@@ -91,6 +104,7 @@ BCLI = [
 class TokenState:
     token: str
     cents_paid_in: int = 0
+    cents_consumed: int = 0     # debited at launch + on each autorenew
     created_at_wall: float = field(default_factory=time.time)
     server_ids: list = field(default_factory=list)
     invoice_ids: list = field(default_factory=list)
@@ -127,6 +141,7 @@ class ServerState:
     ipv4: str = ""
     ipv6: str = ""
     ssh_port: int = 22
+    friendly_name: str = ""
 
 
 _lock = threading.RLock()
@@ -314,24 +329,10 @@ def _server_apparent_expiration(s: ServerState, now: float) -> int:
     return round(now + remaining_wall * TIME_SCALE)
 
 
-def _cents_burned_for_server(s: ServerState, now: float) -> int:
-    """Cents this server has consumed at the production rate against sim-elapsed time.
-
-    Capped at expiration_wall_ts so a long-dead server doesn't keep burning the
-    token's pool past its purchased lifetime.
-    """
-    elapsed_wall = max(0.0, min(now, s.expiration_wall_ts) - s.created_at_wall)
-    elapsed_sim = elapsed_wall * TIME_SCALE
-    return int(s.monthly_cost_cents * elapsed_sim / (30 * 86400))
-
-
 def _token_balance_cents(t: TokenState, now: float) -> int:
-    burned = sum(
-        _cents_burned_for_server(_servers[sid], now)
-        for sid in t.server_ids
-        if sid in _servers
-    )
-    return max(0, t.cents_paid_in - burned)
+    """Funds available for the next autorenew. Production-equivalent: balance only
+    moves on invoice credit (up) and on launch/autorenew debit (down)."""
+    return max(0, t.cents_paid_in - t.cents_consumed)
 
 
 def _server_to_dict(s: ServerState) -> dict:
@@ -409,23 +410,18 @@ def _build_sim_env_lines(env: dict, secrets_in: dict, container_ipv4: str) -> st
 # ───── BTC invoice processing ──────────────────────────────────────────
 
 def _credit_invoice(inv: Invoice, txid: str) -> None:
-    """Caller holds _lock. Bump cents_paid_in and extend the primary server (if any)."""
+    """Caller holds _lock. Bump cents_paid_in only.
+
+    Real SporeStack does not extend the server expiration on invoice payment;
+    expiration is set at launch and rolled by autorenew. Keeping that invariant
+    in the mock is what stops the daily-topup loop.
+    """
     inv.paid_txid = txid
     inv.credited_at = time.time()
     tok = _tokens.get(inv.token)
     if not tok:
         return
     tok.cents_paid_in += inv.dollars_owed * 100
-    if not tok.server_ids:
-        return
-    primary = _servers.get(tok.server_ids[0])
-    if not primary:
-        return
-    extra_wall_seconds = (
-        (inv.dollars_owed * 100 / MONTHLY_COST_CENTS) * 30 * 86400 / TIME_SCALE
-    )
-    base_ts = max(primary.expiration_wall_ts, time.time())
-    primary.expiration_wall_ts = base_ts + extra_wall_seconds
 
 
 def _invoice_poller_loop() -> None:
@@ -458,6 +454,199 @@ def _invoice_poller_loop() -> None:
         except Exception as e:
             print(f"[mock_sporestack] invoice poller error: {e}", flush=True)
         time.sleep(INVOICE_POLL_INTERVAL_S)
+
+
+# ───── Server expiry reaping ───────────────────────────────────────────
+
+def _post_event(event: str, data: dict) -> None:
+    """Best-effort POST to the event collector. Silently skips if endpoint unset."""
+    if not LOG_ENDPOINT:
+        return
+    payload = json.dumps({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "node": "mock_sporestack",
+        "event": event,
+        "data": data,
+    }).encode()
+    req = urllib.request.Request(
+        f"{LOG_ENDPOINT}/event",
+        data=payload,
+        headers={"Content-Type": "application/json", "X-Api-Key": LOG_SECRET},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resp.read()
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"[mock_sporestack] event POST failed event={event}: {e}", flush=True)
+
+
+def _lxc_container_exists(machine_id: str) -> bool:
+    """True iff LXD still knows about this container name."""
+    try:
+        r = subprocess.run(
+            ["lxc", "info", machine_id],
+            capture_output=True, text=True, timeout=10,
+        )
+        return r.returncode == 0
+    except Exception:
+        # If we can't even ask LXD, assume the container might still be there
+        # so the caller keeps trying.
+        return True
+
+
+def _force_kill_lxc(machine_id: str) -> Tuple[bool, bool]:
+    """Hard-kill an LXC container — no graceful path. Retries until LXD
+    no longer knows about the name, or we run out of attempts.
+
+    Returns (stop_ok, delete_ok) where both are True iff the container is
+    verifiably gone. A non-zero rc from `lxc stop --force` on an already-
+    nonexistent or already-stopped container is fine; the post-condition
+    check via `lxc info` is the real success signal.
+    """
+    last_stop_rc = None
+    last_delete_rc = None
+    last_stop_err = ""
+    last_delete_err = ""
+    for attempt in range(5):
+        try:
+            r = subprocess.run(
+                ["lxc", "stop", "--force", machine_id],
+                capture_output=True, text=True, timeout=15,
+            )
+            last_stop_rc = r.returncode
+            last_stop_err = (r.stderr or "").strip()
+        except Exception as e:
+            last_stop_err = str(e)
+            print(
+                f"[mock_sporestack] lxc stop --force m={machine_id} attempt={attempt} exc: {e}",
+                flush=True,
+            )
+        try:
+            r = subprocess.run(
+                ["lxc", "delete", "--force", machine_id],
+                capture_output=True, text=True, timeout=15,
+            )
+            last_delete_rc = r.returncode
+            last_delete_err = (r.stderr or "").strip()
+        except Exception as e:
+            last_delete_err = str(e)
+            print(
+                f"[mock_sporestack] lxc delete --force m={machine_id} attempt={attempt} exc: {e}",
+                flush=True,
+            )
+
+        if not _lxc_container_exists(machine_id):
+            return True, True
+        time.sleep(0.5 * (attempt + 1))
+
+    print(
+        f"[mock_sporestack] WARNING m={machine_id} still present after "
+        f"5 force-kill attempts (stop rc={last_stop_rc} err={last_stop_err!r}; "
+        f"delete rc={last_delete_rc} err={last_delete_err!r})",
+        flush=True,
+    )
+    return False, False
+
+
+def _reap_expired_server(machine_id: str, reason: str = "expired") -> None:
+    """Stop+delete an expired LXC container and emit a server_expired event.
+
+    `reason` distinguishes natural-expiry reaping ("expired") from collector-
+    triggered force-reaps after missed heartbeats ("heartbeat_missed").
+    """
+    with _lock:
+        s = _servers.pop(machine_id, None)
+        if s is None:
+            return
+        token = s.token
+        expiration_wall_ts = s.expiration_wall_ts
+        friendly_name = s.friendly_name
+        tok = _tokens.get(token)
+        if tok and machine_id in tok.server_ids:
+            tok.server_ids.remove(machine_id)
+
+    stop_ok, delete_ok = _force_kill_lxc(machine_id)
+
+    reaped_at = time.time()
+    print(
+        f"[mock_sporestack] reaped m={machine_id} token={token[:8]}.. "
+        f"(stop_ok={stop_ok} delete_ok={delete_ok})",
+        flush=True,
+    )
+    _post_event("server_expired", {
+        "machine_id": machine_id,
+        "friendly_name": friendly_name,
+        "token_prefix": token[:8],
+        "expiration_wall_ts": expiration_wall_ts,
+        "reaped_at_wall_ts": reaped_at,
+        "lxc_stop_ok": stop_ok,
+        "lxc_delete_ok": delete_ok,
+        "reason": reason,
+    })
+
+
+def _try_autorenew(machine_id: str) -> bool:
+    """Caller must NOT hold _lock. Returns True if renewed, False if underfunded."""
+    cycle_wall_seconds = 30 * 86400 / TIME_SCALE
+    with _lock:
+        s = _servers.get(machine_id)
+        if s is None:
+            return False
+        tok = _tokens.get(s.token)
+        if tok is None:
+            return False
+        available = max(0, tok.cents_paid_in - tok.cents_consumed)
+        if available < s.monthly_cost_cents:
+            return False
+        tok.cents_consumed += s.monthly_cost_cents
+        # Roll forward from whichever is later: now, or the old expiry. If the
+        # reaper is slow, this keeps cycles aligned with sim time rather than
+        # compounding lag.
+        base_ts = max(s.expiration_wall_ts, time.time())
+        s.expiration_wall_ts = base_ts + cycle_wall_seconds
+        new_expiration_wall_ts = s.expiration_wall_ts
+        token_balance_after = tok.cents_paid_in - tok.cents_consumed
+        friendly_name = s.friendly_name
+        token_prefix = s.token[:8]
+
+    print(
+        f"[mock_sporestack] autorenew m={machine_id} token={token_prefix}.. "
+        f"-${s.monthly_cost_cents / 100:.2f} → balance ${token_balance_after / 100:.2f}",
+        flush=True,
+    )
+    _post_event("server_renewed", {
+        "machine_id": machine_id,
+        "friendly_name": friendly_name,
+        "token_prefix": token_prefix,
+        "debited_cents": s.monthly_cost_cents,
+        "token_balance_cents_after": token_balance_after,
+        "new_expiration_wall_ts": new_expiration_wall_ts,
+    })
+    return True
+
+
+def _server_expiry_reaper_loop() -> None:
+    """Daemon: every EXPIRY_REAPER_INTERVAL_S, autorenew servers past their runway
+    if their token covers another monthly_cost; otherwise reap them."""
+    while True:
+        try:
+            now = time.time()
+            with _lock:
+                expired = [
+                    mid for mid, s in _servers.items()
+                    if now >= s.expiration_wall_ts
+                ]
+            for mid in expired:
+                try:
+                    if _try_autorenew(mid):
+                        continue
+                    _reap_expired_server(mid)
+                except Exception as e:
+                    print(f"[mock_sporestack] expiry handling failed m={mid}: {e}", flush=True)
+        except Exception as e:
+            print(f"[mock_sporestack] reaper loop error: {e}", flush=True)
+        time.sleep(EXPIRY_REAPER_INTERVAL_S)
 
 
 # ───── Flask routes ────────────────────────────────────────────────────
@@ -600,9 +789,19 @@ def token_server_create(token: str):
     if days < 1:
         return jsonify({"error": "days must be >= 1"}), 400
 
+    launch_cost_cents = int(MONTHLY_COST_CENTS * days / 30)
+
     with _lock:
-        if token not in _tokens:
+        tok = _tokens.get(token)
+        if not tok:
             return jsonify({"error": "no such token"}), 404
+        available = max(0, tok.cents_paid_in - tok.cents_consumed)
+        if available < launch_cost_cents:
+            return jsonify({
+                "error": "insufficient token balance",
+                "needed_cents": launch_cost_cents,
+                "balance_cents": available,
+            }), 402
 
     machine_id = "m-" + uuid.uuid4().hex[:12]
     try:
@@ -632,6 +831,7 @@ def token_server_create(token: str):
     with _lock:
         _servers[machine_id] = server
         _tokens[token].server_ids.append(machine_id)
+        _tokens[token].cents_consumed += launch_cost_cents
 
     return jsonify({"machine_id": machine_id})
 
@@ -660,6 +860,7 @@ def sim_start(machine_id: str):
         if not s:
             return jsonify({"error": "no such server"}), 404
         ipv4 = s.ipv4
+        s.friendly_name = env.get("MYCELIUM_FRIENDLY_NAME", "") or s.friendly_name
 
     try:
         env_body = _build_sim_env_lines(env, secrets_in, ipv4)
@@ -677,6 +878,23 @@ def sim_health(machine_id: str):
     return jsonify({"running": _lxc_pgrep_main(machine_id)})
 
 
+@app.post("/sim/force_reap")
+def sim_force_reap():
+    body = request.get_json(silent=True) or {}
+    name = body.get("friendly_name", "")
+    if not name:
+        return jsonify({"error": "friendly_name required"}), 400
+    with _lock:
+        mid = next((m for m, s in _servers.items() if s.friendly_name == name), None)
+    if mid is None:
+        return ("", 204)  # already gone — idempotent no-op
+    try:
+        _reap_expired_server(mid, reason="heartbeat_missed")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return ("", 200)
+
+
 # ───── Entrypoint ──────────────────────────────────────────────────────
 
 def main() -> None:
@@ -684,9 +902,14 @@ def main() -> None:
         target=_invoice_poller_loop, name="invoice-poller", daemon=True,
     )
     poller.start()
+    reaper = threading.Thread(
+        target=_server_expiry_reaper_loop, name="expiry-reaper", daemon=True,
+    )
+    reaper.start()
     print(
         f"[mock_sporestack] listening on {BIND_HOST}:{BIND_PORT} "
-        f"(TIME_SCALE={TIME_SCALE}, monthly_cost={MONTHLY_COST_CENTS}c)",
+        f"(TIME_SCALE={TIME_SCALE}, monthly_cost={MONTHLY_COST_CENTS}c, "
+        f"reaper_interval={EXPIRY_REAPER_INTERVAL_S}s)",
         flush=True,
     )
     app.run(host=BIND_HOST, port=BIND_PORT, threaded=True)

@@ -32,6 +32,7 @@ MYCELIUM_BASE_IMAGE = "mycelium-base"
 IPV8_BOOTSTRAP_IMAGE = "ipv8-bootstrap-base"
 IPV8_BOOTSTRAP_NAME = "ipv8-bootstrap"
 GENESIS_NAME = "genesis"
+EVENT_API_KEY = "123456789"  # matches event_collector.py:API_KEY
 BCLI_DATADIR = SIM_HOME / "regtest"
 BCLI = [
     "bitcoin-cli", "-regtest", f"-datadir={BCLI_DATADIR}",
@@ -140,7 +141,21 @@ def _spawn_background(name: str, script_path: pathlib.Path,
 def start_event_collector(cfg: dict) -> None:
     _log("starting event collector...")
     event_collector_url = f"http://127.0.0.1:{cfg['network']['event_collector_port']}"
-    _spawn_background("event_collector", SIM_DIR / "event_collector.py")
+    g = cfg["genesis"]
+    extra_env = {
+        "MYCELIUM_SIM_TIME_SCALE":              str(cfg["sporestack"]["time_scale"]),
+        "MYCELIUM_SIM_BTC_USD":                 str(cfg["sporestack"]["btc_usd"]),
+        "MYCELIUM_SIM_MONTHLY_COST_CENTS":      str(cfg["sporestack"]["monthly_cost_cents"]),
+        "MYCELIUM_SIM_FAUCET_MAX_MULTIPLIER":   str(g["faucet_max_multiplier"]),
+        "MYCELIUM_SIM_FAUCET_MIN_FLOOR":        str(g["faucet_min_floor"]),
+        "MYCELIUM_SIM_FAUCET_DAYS_PER_MONTH":   str(g["faucet_days_per_month"]),
+        "MYCELIUM_SIM_FAUCET_PAUSE_THRESHOLD":  str(g["faucet_pause_threshold"]),
+        "MYCELIUM_SIM_FAUCET_RESUME_THRESHOLD": str(g["faucet_resume_threshold"]),
+        # Lets the collector's eviction loop call /sim/force_reap on the mock.
+        "MYCELIUM_SIM_MOCK_PORT":               str(cfg["network"]["mock_sporestack_port"]),
+        "MYCELIUM_SIM_HEARTBEAT_INTERVAL":      str(cfg["intervals"]["heartbeat_interval"]),
+    }
+    _spawn_background("event_collector", SIM_DIR / "event_collector.py", extra_env=extra_env)
     _wait_for_healthz(f"{event_collector_url}/healthz")
     _log("event collector healthy")
 
@@ -160,6 +175,11 @@ def start_mock_sporestack(cfg: dict) -> None:
         "MYCELIUM_SIM_MOCK_PORT":           str(net["mock_sporestack_port"]),
         "MYCELIUM_SIM_BOOTSTRAP_PORT":      str(net["ipv8_bootstrap_port"]),
         "MYCELIUM_SIM_LXC_BRIDGE":          net["lxc_bridge"],
+        # Event-collector wiring for the reaper's server_expired posts. The
+        # collector binds 0.0.0.0:<port>, so the host-side mock reaches it via
+        # 127.0.0.1. Same envelope/secret contract as the containers.
+        "MYCELIUM_LOG_ENDPOINT":            f"http://127.0.0.1:{net['event_collector_port']}",
+        "MYCELIUM_LOG_SECRET":              EVENT_API_KEY,
         # Interval defaults applied to every spawned node
         "MYCELIUM_SIM_DECISION_INTERVAL":      str(ivl["decision_interval"]),
         "MYCELIUM_SIM_HEARTBEAT_INTERVAL":     str(ivl["heartbeat_interval"]),
@@ -533,7 +553,7 @@ def main() -> None:
     net = cfg["network"]
     event_collector_url = f"http://127.0.0.1:{net['event_collector_port']}"
     mock_sporestack_url = f"http://127.0.0.1:{net['mock_sporestack_port']}"
-    event_api_key = "123456789"
+    event_api_key = EVENT_API_KEY
 
     preflight(cfg)
     start_btc_stack(cfg)

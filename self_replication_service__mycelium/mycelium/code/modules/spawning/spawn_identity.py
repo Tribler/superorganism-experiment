@@ -28,7 +28,6 @@ from .ssh_deployer import generate_ssh_keypair
 
 logger = setup_logger(__name__, log_file=Config.LOG_DIR / "orchestrator.log", level=Config.LOG_LEVEL)
 
-_SS_MIN_INVOICE_DOLLARS = 5
 _POLL_INTERVAL = 30
 _POLL_TIMEOUT = 1800
 
@@ -37,10 +36,6 @@ _POLL_TIMEOUT = 1800
 _INVOICE_EXPIRY_SAFETY_MARGIN_SECONDS = 60
 # Fallback expiry when SporeStack's response omits `expires` (~10 min nominal).
 _INVOICE_DEFAULT_LIFETIME_SECONDS = 600
-# Conservative upper-bound on bitcoinlib's tx fee, used as a parent-balance
-# headroom check so wallet.send doesn't fail with insufficient-for-fee after
-# the gate passes.
-_ESTIMATED_FEE_SAT_MAX = 5_000
 # Runaway-guard: cap the number of fresh invoices minted within a single spawn.
 _MAX_FUNDING_ATTEMPTS = 5
 
@@ -157,7 +152,7 @@ async def _mint_funding_invoice(
         Config.VPS_FLAVOR, Config.VPS_PROVIDER
     )
     needed_cents = int(monthly_cents * Config.TOPUP_TARGET_DAYS / 30)
-    needed_dollars = max(_SS_MIN_INVOICE_DOLLARS, math.ceil(needed_cents / 100))
+    needed_dollars = max(Config.SPORESTACK_MIN_INVOICE_DOLLARS, math.ceil(needed_cents / 100))
     logger.info(
         "Funding (attempt %d/%d): monthly=%d cents, target_days=%d → $%d",
         attempts + 1, _MAX_FUNDING_ATTEMPTS, monthly_cents, Config.TOPUP_TARGET_DAYS, needed_dollars,
@@ -194,12 +189,12 @@ async def _mint_funding_invoice(
 async def _check_parent_balance(wallet: SpendingWallet, amount_sat: int) -> None:
     """Raise SpawnError if parent doesn't have amount_sat plus a fee buffer."""
     wallet_sat = await asyncio.to_thread(wallet.get_balance_satoshis)
-    needed = amount_sat + _ESTIMATED_FEE_SAT_MAX
+    needed = amount_sat + Config.SPAWN_FEE_BUFFER_SAT
     if wallet_sat < needed:
         raise SpawnError(
             "identity",
             f"Insufficient parent BTC: have {wallet_sat} sat, need {amount_sat} sat "
-            f"+ {_ESTIMATED_FEE_SAT_MAX} sat fee buffer ({needed} sat total)",
+            f"+ {Config.SPAWN_FEE_BUFFER_SAT} sat fee buffer ({needed} sat total)",
         )
 
 

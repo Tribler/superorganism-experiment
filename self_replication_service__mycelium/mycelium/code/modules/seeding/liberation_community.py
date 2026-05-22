@@ -159,8 +159,6 @@ class LiberationCommunity(Community):
     @lazy_wrapper(SeedboxInfoPayload)
     def on_seedbox_info(self, peer: Peer, payload: SeedboxInfoPayload) -> None:
         """Handle received seedbox info."""
-        self.logger.info("Received seedbox info from peer %s: %s",
-                        peer.mid.hex()[:16], payload.friendly_name)
 
         if self.on_seedbox_info_callback:
             try:

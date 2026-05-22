@@ -76,6 +76,8 @@ class Config:
     SPAWN_THRESHOLD_DAYS: int  = int(os.getenv("MYCELIUM_SPAWN_THRESHOLD_DAYS", "60"))
     SPAWN_RESERVE_DAYS: int    = int(os.getenv("MYCELIUM_SPAWN_RESERVE_DAYS", "30"))
     INHERITANCE_RATIO: float   = float(os.getenv("MYCELIUM_INHERITANCE_RATIO", "0.4"))
+    SPAWN_FEE_BUFFER_SAT: int  = int(os.getenv("MYCELIUM_SPAWN_FEE_BUFFER_SAT", "5000"))
+    SPORESTACK_MIN_INVOICE_DOLLARS: int = int(os.getenv("MYCELIUM_SPORESTACK_MIN_INVOICE_DOLLARS", "5"))
 
     # Decision loop
     DECISION_INTERVAL: int     = int(os.getenv("MYCELIUM_DECISION_INTERVAL", "21600")) #6h

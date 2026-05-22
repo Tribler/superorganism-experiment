@@ -1,18 +1,20 @@
-# Mycelium offline simulation — all configurable parameters.
-# Edit this file to tune the simulation without touching any Python.
-
 [btc]
-block_interval_s = 1          # seconds between auto-mined regtest blocks
+block_interval_s = 1          # seconds between auto-mined blocks
 
 [sporestack]
-time_scale         = 2000     # speed-up factor (1000 → 30 sim-days ≈ 43 min real time)
-btc_usd            = 50000    # BTC/USD rate used for invoice pricing
-monthly_cost_cents = 3000     # cents per server per 30 sim-days
+time_scale         = 4000     # speed-up factor
+btc_usd            = 50000    # BTC/USD rate
+monthly_cost_cents = 9800     # cents per server per 30 sim-days -> 97 eur per month for 400gb storage per node
 invoice_lifetime_s = 600      # seconds an unpaid invoice stays open
 
 [genesis]
-days                   = 90   # SporeStack runway purchased at genesis
-initial_btc            = 0.1   # regtest BTC fauceted into genesis wallet each run
+days                   = 90     # SporeStack runway purchased for genesis
+initial_btc            = 0.02   # regtest BTC fauceted into genesis wallet -> 1k eur
+faucet_max_multiplier   = 5     # daily_max = active_nodes * monthly_cost_btc * this / days_per_month
+faucet_min_floor        = 0.8   # minimum = percentage of max
+faucet_days_per_month   = 30    # divisor for the daily drip
+faucet_pause_threshold  = 50    # pause drip when active_nodes >= this
+faucet_resume_threshold = 40    # resume drip when active_nodes <= this
 caution_trait          = 0.5
 caution_mutation_sigma = 0.05
 spawn_threshold_days   = 60
@@ -20,7 +22,7 @@ spawn_reserve_days     = 30
 inheritance_ratio      = 0.2
 
 [intervals]
-# Mycelium wall-clock intervals in seconds (applied to every spawned node).
+# Mycelium actual intervals in seconds
 decision_interval         = 30
 heartbeat_interval        = 10
 peer_registry_ttl         = 120

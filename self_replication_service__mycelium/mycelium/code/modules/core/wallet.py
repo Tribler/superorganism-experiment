@@ -39,6 +39,13 @@ _bitcoinlib_db.create_engine = _create_engine_thread_safe
 if Config.SIM_MODE:
     import asyncio as _asyncio
     import socket as _socket
+    # Default 5s is too tight when N containers all fan-out wallet.scan() at the
+    # single host electrs — queue stretches past 5s, aiorpcx aborts client-side.
+    # Rewrite the BaseClient.__init__ defaults tuple (the 5 there is unique).
+    from bitcoinlib.services.baseclient import BaseClient as _BaseClient
+    _BaseClient.__init__.__defaults__ = tuple(
+        60 if d == 5 else d for d in _BaseClient.__init__.__defaults__
+    )
     try:
         import aiorpcx as _aiorpcx
     except ImportError:

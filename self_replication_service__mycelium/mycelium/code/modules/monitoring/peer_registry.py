@@ -35,6 +35,8 @@ class PeerInfo:
 class PeerRegistry:
     def __init__(self, ttl_seconds: int = 3600) -> None:
         self._fleet: Dict[str, PeerInfo] = {}
+        if Config.SIM_MODE:
+            ttl_seconds = 60
         self._ttl = ttl_seconds
 
     def on_seedbox_info_received(self, peer: Peer, payload: SeedboxInfoPayload) -> None:
@@ -54,8 +56,6 @@ class PeerRegistry:
             vps_days_remaining=payload.vps_days_remaining,
             last_seen=time.time(),
         )
-        logger.info("Fleet updated: %s (%d sat, %d days remaining)",
-                    payload.friendly_name, payload.btc_balance_sat, payload.vps_days_remaining)
 
     def get_live_peers(self) -> List[PeerInfo]:
         """Return peers heard from within the TTL window."""
