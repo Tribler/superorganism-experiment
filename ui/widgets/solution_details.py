@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import StrEnum
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 
+from compat import StrEnum
 from democracy.models.DTOs.solution_with_votes import SolutionWithVotes
 from ui.constants import SOLUTION_VOTE_TARGET
 

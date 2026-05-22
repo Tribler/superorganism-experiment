@@ -43,11 +43,15 @@ def setup_logging() -> None:
     with open(config_file, "r", encoding="utf-8") as f:
         logging_config = json.load(f)
 
+    _normalize_logging_config_for_python_version(logging_config)
     _ensure_log_directories_exist(logging_config, base_dir=config_file.parent)
 
     logging.config.dictConfig(logging_config)
 
     queue_listeners = []
+
+    if sys.version_info < (3, 12):
+        return
 
     for handler_name in logging_config.get("handlers", {}):
         handler = logging.getHandlerByName(handler_name)
@@ -61,6 +65,65 @@ def setup_logging() -> None:
 
     if queue_listeners:
         atexit.register(_stop_queue_listeners, queue_listeners)
+
+
+def _normalize_logging_config_for_python_version(logging_config: dict) -> None:
+    """
+    Downgrade QueueHandler listener configuration for Python versions that do not support
+    dictConfig-managed QueueHandler/QueueListener wiring.
+
+    Python 3.12 added support for QueueHandler entries with "handlers" and
+    "respect_handler_level" in dictConfig. On older versions, we replace references to
+    those queue handlers with their target handlers and remove the queue handlers
+    themselves.
+
+    :param logging_config: The logging configuration dictionary.
+    :returns: None.
+    """
+    if sys.version_info >= (3, 12):
+        return
+
+    handlers = logging_config.get("handlers", {})
+    queue_targets: dict[str, list[str]] = {}
+
+    for handler_name, handler_config in list(handlers.items()):
+        if handler_config.get("class") != "logging.handlers.QueueHandler":
+            continue
+
+        target_handlers = handler_config.get("handlers", [])
+
+        if isinstance(target_handlers, list):
+            queue_targets[handler_name] = target_handlers
+
+    if not queue_targets:
+        return
+
+    _replace_queue_handlers_in_logger_config(logging_config.get("root"), queue_targets)
+
+    for logger_config in logging_config.get("loggers", {}).values():
+        _replace_queue_handlers_in_logger_config(logger_config, queue_targets)
+
+    for handler_name in queue_targets:
+        handlers.pop(handler_name, None)
+
+
+def _replace_queue_handlers_in_logger_config(
+    logger_config: Optional[dict], queue_targets: dict[str, list[str]]
+) -> None:
+    if not logger_config:
+        return
+
+    configured_handlers = logger_config.get("handlers")
+
+    if not isinstance(configured_handlers, list):
+        return
+
+    expanded_handlers = []
+
+    for handler_name in configured_handlers:
+        expanded_handlers.extend(queue_targets.get(handler_name, [handler_name]))
+
+    logger_config["handlers"] = expanded_handlers
 
 
 def _ensure_log_directories_exist(logging_config: dict, base_dir: pathlib.Path) -> None:

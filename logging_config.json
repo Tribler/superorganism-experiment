@@ -37,7 +37,7 @@
     "handlers": ["file_queue_handler"]
   },
   "loggers": {
-    "superorganism.democracy": {
+    "superorganism": {
       "level": "DEBUG",
       "handlers": ["console_queue_handler"],
       "propagate": true
