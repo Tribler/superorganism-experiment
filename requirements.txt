@@ -1,7 +1,8 @@
 aiohttp>=3.13.2
 bencodepy>=0.9.5
-cryptography
+cryptography<43
 httpx
 libtorrent>=2.0.11
 pyipv8==3.1.0
 pyside6
+matplotlib
