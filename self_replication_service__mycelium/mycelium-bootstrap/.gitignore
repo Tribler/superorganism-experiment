@@ -356,7 +356,7 @@ id_ed25519*
 *.token
 
 # Large files
-yt-api-cc-scripts/cc_video_ids.txt
+yt-cc-dataset-id-extraction/cc_video_ids.txt
 *.gif
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript
 

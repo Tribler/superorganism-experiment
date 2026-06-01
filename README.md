@@ -256,29 +256,6 @@ Options:
   --no-xpub           Deploy without Bitcoin wallet
 ```
 
-#### stop_mycelium.py
-
-Stop mycelium orchestrator on the VPS to save resources.
-
-```
-python stop_mycelium.py
-```
-
-Connects to the VPS and kills the running mycelium process. Run `deploy_mycelium.py` to restart.
-
-### Content Sourcing
-
-Search for Creative Commons videos and download them:
-
-```bash
-# Requires YOUTUBE_API_KEY in .env
-python yt-api-cc-scripts/yt-api-cc.py
-python yt-api-cc-scripts/yt-api-cc-playlists.py
-
-# Download collected URLs
-./scripts/parallel_ytdlp_download.sh
-```
-
 ### Data Storage
 
 All persistent data is stored in `~/.mycelium/`:
@@ -291,44 +268,6 @@ All persistent data is stored in `~/.mycelium/`:
 └── server.json        # Acquired VPS info
 ```
 
-## Mycelium-simulation (Mycelium Economic Simulation)
-
-Simulates the economic lifecycle of self-replicating mycelium nodes: income (faucet), expenses (rent), reproduction (spawning children), and death (running out of funds).
-
-### Quick start
-
-```bash
-pip install -r requirements.txt
-```
-
-```bash
-python -m host.simulator -c config/small.yaml
-```
-
-Output goes to `data/events.csv`. Set `tick_interval: 0` in the config to run at full speed.
-
-### Changing parameters
-
-All parameters live in `config/default.yaml`. To experiment, change it or create a new config file.
-```bash
-python -m host.simulator -c config/<your_file>.yaml
-```
-
-### How a tick works
-
-Each tick is a synchronous round:
-
-1. Rent is deducted from every living node
-2. Bankrupt nodes are killed
-3. Faucet injects funds
-4. Every living node decides exactly once: `none`, `spawn`, or `failsafe`
-5. Decisions are processed (spawns transfer inheritance; failsafe nodes donate all funds then die)
-6. Conservation invariant is checked
-
-### Plotting results
-
-```bash
-python analysis/plot.py data/events.csv -o data/plots
-```
+## Mycelium-simulation 
 
 ## Democracy

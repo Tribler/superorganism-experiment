@@ -1,4 +1,4 @@
-# Mycelium VPS Deployer
+# Mycelium Production VPS Deployer
 
 Autonomous VPS provisioning system using Bitcoin payments and SporeStack API. Deploys [mycelium](https://github.com/DogariuMatei/mycelium), a BitTorrent orchestrator for Creative Commons content.
 
@@ -15,7 +15,7 @@ python wallet.py scan mycelium         # Verify funds received
 ```
 ### 2. Fund SporeStack account
 ```bash
-python fund_sporestack.py fund 100
+python fund_sporestack.py fund 100     # 100$ 
 ```
 
 ### 3. Acquire VPS
@@ -27,14 +27,54 @@ python acquire_vps.py
 ```bash
 python deploy_mycelium.py
 ```
-### 5. (Optional) Stop mycelium
+
+# Mycelium Local Simulation:
+
+### Install Dependencies:
+
+#### 1. Python 3.11+
 ```bash
-python stop_mycelium.py
+python3 --version   # must be 3.11 or newer
 ```
 
-## Simulation:
+#### 2. LXD 
+```bash
 
-  `cd self_replication_service__mycelium/mycelium-bootstrap/sim`
+sudo snap install lxd
+sudo lxd init --auto
+sudo usermod -aG lxd $USER
+# Log out and back in (or: newgrp lxd) for group to take effect
+```
+
+#### 3. Bitcoin Core (`bitcoind` + `bitcoin-cli`)
+Download directly from bitcoincore.org (the PPA is unmaintained):
+```bash
+VERSION="31.0"   # check https://bitcoincore.org/en/download/ for latest
+wget https://bitcoincore.org/bin/bitcoin-core-${VERSION}/bitcoin-${VERSION}-x86_64-linux-gnu.tar.gz
+tar -xzf bitcoin-${VERSION}-x86_64-linux-gnu.tar.gz
+sudo install -m 0755 -t /usr/local/bin bitcoin-${VERSION}/bin/bitcoind bitcoin-${VERSION}/bin/bitcoin-cli
+```
+
+#### 4. Electrs (Electrum server)
+Requires Rust and a C linker. Build from source:
+```bash
+sudo apt install build-essential clang libclang-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+git clone https://github.com/romanz/electrs /tmp/electrs
+cd /tmp/electrs && cargo build --release
+sudo install -m 0755 /tmp/electrs/target/release/electrs /usr/local/bin/electrs
+```
+
+#### 5. Python packages
+From the `mycelium-bootstrap/` directory:
+```bash
+pip install -r requirements.txt
+```
+
+### Run Simulation
+
+  From `cd self_replication_service__mycelium/mycelium-bootstrap/sim`:
 ```bash
   ./run_simulation.py --rebuild-images
 ````
@@ -42,25 +82,21 @@ python stop_mycelium.py
 ./stop_simulation.sh && python3 run_simulation.py 
 ```
 
-Defaults are --genesis-days 90 --genesis-btc 10 --time-scale 1000, with the genesis log auto-tailing.
+Default configurable parameters can be found in `/sim/config.toml`
 
-In a secondary terminals:
+To check the logs of any running container, in a secondary terminal:
 ```bash
-  tail -f sim/data/events.jsonl                # birth + state_snapshots coming
-#  curl -s http://127.0.0.1:8766/healthz | jq   # mock: tokens/servers/time_scale
-  curl -s http://127.0.0.1:8765/healthz        # event collector
-  lxc list                                      # m-<12hex> + ipv8-bootstrap
-  lxc exec   m-dee6666d4b6d -- cat /root/logs/orchestrator.log  # orchestrator logs
+  lxc list                                                    # pick whichever m-<12hex> id, then
+  lxc exec   m-<hex_here> -- cat /root/logs/orchestrator.log  # orchestrator logs
 ```
-
-Stop + delete everything:
+Stop + delete all containers:
 ```bash
   ./stop_simulation.sh
 ````
 
 Saves events.jsonl to sim/data/runs/<timestamp>/, kills the host services, deletes the containers. Images and the genesis wallet stay.
 
-## CLI Reference
+## CLI Reference for Production Deployment Scripts
 
 ### wallet.py
 
@@ -128,31 +164,7 @@ Options:
   --no-xpub           Deploy without Bitcoin wallet
 ```
 
-### stop_mycelium.py
-
-Stop mycelium orchestrator on the VPS to save resources.
-
-```
-python stop_mycelium.py
-```
-
-Connects to the VPS and kills the running mycelium process. Run `deploy_mycelium.py` to restart.
-
-## Content Sourcing
-
-Search for Creative Commons videos and download them:
-
-```bash
-# Requires YOUTUBE_API_KEY in .env
-python yt-api-cc-scripts/yt-api-cc.py
-python yt-api-cc-scripts/yt-api-cc-playlists.py
-
-# Download collected URLs
-./scripts/parallel_ytdlp_download.sh
-```
-
 ## Data Storage
-
 All persistent data is stored in `~/.mycelium/`:
 
 ```

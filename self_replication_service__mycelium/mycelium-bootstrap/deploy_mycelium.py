@@ -24,7 +24,7 @@ LOG_ENDPOINT_FILE = CFG["log_endpoint_file"]
 LOG_SECRET_FILE = CFG["log_secret_file"]
 SPORESTACK_TOKEN_FILE = CFG["token_file"]
 DEFAULT_SSH_KEY_PATH = CFG["ssh_key_path"]
-DEFAULT_VIDEO_IDS_FILE = Path(__file__).parent / "yt-api-cc-scripts" / "cc_video_ids.txt"
+DEFAULT_VIDEO_IDS_FILE = Path(__file__).parent / "yt-cc-dataset-id-extraction" / "cc_video_ids.txt"
 DEFAULT_COOKIES_FILE = Path(__file__).parent / "yt_cookies.txt"
 
 
