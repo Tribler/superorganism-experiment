@@ -28,11 +28,6 @@ if str(_BENCH_DIR) not in sys.path:
 # behind NAT, especially for two peers on the same host).
 _PEER_REGISTRY_PATH = _BENCH_DIR / ".peer_registry.json"
 
-# Number of consecutive gossip ticks an originator can be absent before its
-# CRDT entries are pruned from local arm tables. A departed peer's evidence
-# stops influencing posteriors after this many ticks of silence.
-STALE_ORIGINATOR_TTL = 20
-
 # Registry entries older than this are treated as dead (process crashed before
 # cleanup). Live peers heartbeat by rewriting their own entry periodically.
 _REGISTRY_STALE_SECONDS = 30
@@ -256,8 +251,7 @@ class LTRCommunityThread(QThread):
         from local_experiment import (
             LTRMABCommunity,
             BASE_PORT,
-            GOSSIP_ROUNDS,
-            GOSSIP_DELAY,
+            GOSSIP_INTERVAL_S,
             PEER_DISCOVERY_WAIT,
             SEED,
         )
@@ -467,8 +461,18 @@ class LTRCommunityThread(QThread):
             INTER_QUERY_SLEEP = 0.01       # yield to the event loop
             hotswap_done = False
 
+            # Wall-clock cadence for gossip + TTL eviction. Decoupled from
+            # query throughput: a slow peer doesn't gossip more often, a
+            # fast one doesn't gossip less. One emission per interval to
+            # exactly one random stranger.
+            last_gossip_emit = time.time()
+
             state.phase = "querying"
-            state.event("Entering continuous operation — no fixed round count.", "info")
+            state.event(
+                "Entering continuous operation — gossip every "
+                f"{GOSSIP_INTERVAL_S:.0f}s to a random stranger.",
+                "info",
+            )
 
             while not self._stop_event.is_set():
                 # --- Process a small batch of queries ---
@@ -484,17 +488,34 @@ class LTRCommunityThread(QThread):
                 queries_since_tick += batch
                 await asyncio.sleep(INTER_QUERY_SLEEP)
 
+                # --- Wall-clock gossip emission (single tuple to one stranger) ---
+                if (
+                    self.gossip_enabled
+                    and time.time() - last_gossip_emit >= GOSSIP_INTERVAL_S
+                ):
+                    sent = await community.send_gossip()
+                    if sent:
+                        state.event(
+                            "Gossiped one tuple to a random stranger", "gossip"
+                        )
+                    # Drop expired peer-observation entries so stale peers
+                    # stop influencing the aggregate.
+                    evicted = community.bandit.evict_all_stale()
+                    if evicted:
+                        state.event(
+                            f"Evicted {evicted} stale peer-observation entries",
+                            "info",
+                        )
+                    last_gossip_emit = time.time()
+
                 # Not yet at a tick boundary — keep querying.
                 if queries_since_tick < self.queries_per_round:
                     continue
 
-                # --- Tick boundary: advance counter, run gossip + exclusions ---
+                # --- Tick boundary: snapshot + survival check ---
                 tick += 1
                 queries_since_tick = 0
                 state.current_round = tick
-                # Advance the bandit's local clock so TTL pruning has a
-                # fresh reference for every gossip tick.
-                community.bandit.tick_counter = tick
 
                 # Optional one-shot hot-swap at a specific tick.
                 if (
@@ -511,13 +532,16 @@ class LTRCommunityThread(QThread):
                     await asyncio.sleep(0.2)
 
                 # --- Survival / exclusion check ---
+                # Each peer reaches its own verdict from the gossip-aggregated
+                # evidence (own + non-stale peer observations). There is no
+                # exclusion broadcast: a peer announcing "exclude k" would let
+                # a single bad actor evict the best arm. Agreement comes from
+                # peers seeing similar evidence, not explicit verdicts.
                 state.phase = "survival"
                 excluded_this_tick = community.check_exclusions(tick)
                 for model_name in excluded_this_tick:
                     lcb, ucb = community.bandit.confidence_bounds(model_name)
                     reason = f"UCB={ucb:.3f} < best_LCB"
-                    if self.gossip_enabled:
-                        await community.broadcast_exclusion(model_name, tick, reason)
                     state.event(f"ARM EXCLUDED: {model_name} ({reason})", "exclusion")
                     await asyncio.sleep(0.02)
 
@@ -552,38 +576,6 @@ class LTRCommunityThread(QThread):
                     f"excluded={len(community.excluded_models)}",
                     "round",
                 )
-
-                # --- TTL prune: evict originator entries from peers that
-                # have gone silent for STALE_ORIGINATOR_TTL consecutive ticks.
-                # Done before gossip so stale evidence doesn't re-propagate.
-                evicted = community.bandit.prune_stale_originators(
-                    STALE_ORIGINATOR_TTL
-                )
-                if evicted:
-                    by_origin: dict[str, int] = {}
-                    for _arm, origin in evicted:
-                        by_origin[origin] = by_origin.get(origin, 0) + 1
-                    summary = ", ".join(
-                        f"origin {o} ({n} arms)" for o, n in by_origin.items()
-                    )
-                    state.event(
-                        f"Pruned stale originator entries: {summary}",
-                        "info",
-                    )
-
-                # --- Gossip phase ---
-                if self.gossip_enabled:
-                    state.phase = "gossiping"
-                    for gr in range(1, GOSSIP_ROUNDS + 1):
-                        if self._stop_event.is_set():
-                            break
-                        n = await community.send_gossip()
-                        if n > 0:
-                            state.event(
-                                f"Gossip {gr}/{GOSSIP_ROUNDS}: sent to {n} peer(s)",
-                                "gossip",
-                            )
-                        await asyncio.sleep(GOSSIP_DELAY)
 
                 # Reset per-tick counters on the community so its internal
                 # "round" bookkeeping tracks ticks rather than stale rounds.

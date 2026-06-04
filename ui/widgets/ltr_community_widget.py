@@ -412,7 +412,7 @@ class LTRCommunityWidget(QWidget):
         self._gossip_check.setProperty("role", "ltr-control-label")
 
         self._recent_only_check = QCheckBox(f"Display only last {_RECENT_WINDOW} ticks")
-        self._recent_only_check.setChecked(False)
+        self._recent_only_check.setChecked(True)
         self._recent_only_check.setProperty("role", "ltr-control-label")
         self._recent_only_check.setToolTip(
             "Show only the most recent ticks on the charts. "

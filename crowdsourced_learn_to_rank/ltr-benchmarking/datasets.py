@@ -375,6 +375,15 @@ class LTRDataset:
         return result
 
 
+_DEFAULT_MAX_QUERIES: dict[str, int] = {
+    # aol4foltr ships as one ~60 GB letor.txt. Loading it densely (sklearn's
+    # load_svmlight_file + .toarray()) blows out RAM and appears to hang. Cap
+    # the sample aggressively — the MAB experiment only needs a few thousand
+    # queries to produce a meaningful NDCG signal.
+    "aol4foltr": 5000,
+}
+
+
 def get_dataset(
     dataset_id: str,
     base_dir: Path | str = "data",
@@ -409,6 +418,9 @@ def get_dataset(
         "letor4-mq2008": "MQ2008",
         "aol4foltr": "aol4foltr",
     }
+
+    if max_queries is None:
+        max_queries = _DEFAULT_MAX_QUERIES.get(dataset_id)
 
     data_dir = Path(base_dir) / dir_map.get(dataset_id, dataset_id)
     return LTRDataset(data_dir, dataset_id, fold, normalize, max_queries)

@@ -10,8 +10,10 @@ Features:
 5. Survival-of-the-fittest: eliminate models with low performance after each round
 """
 import base64
+import hashlib
 import json
 import os
+import struct
 import sys
 import asyncio
 from asyncio import run, sleep, Event, Lock
@@ -32,12 +34,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
+from ipv8.keyvault.crypto import default_eccrypto
 from ipv8.lazy_community import lazy_wrapper
 from ipv8.messaging.payload_dataclass import DataClassPayload
 from ipv8.peer import Peer
 from ipv8_service import IPv8
 
-from mab import UCB1, ThompsonSampling, ArmStats, OriginatorEntry, _derive_rng
+from mab import UCB1, ThompsonSampling, ArmStats, _derive_rng
 from datasets import get_dataset
 from ltr_evaluator import load_model, ModelMetadata
 
@@ -47,9 +50,10 @@ NUM_ROUNDS = 5
 QUERIES_PER_ROUND = 100  # Each peer processes this many queries per round
 BASE_PORT = 8090
 PEER_DISCOVERY_WAIT = 3
-GOSSIP_ROUNDS = 3  # Number of gossip exchanges between query rounds
-GOSSIP_DELAY = 0.5  # Delay between gossip messages
-MAX_GOSSIP_PEERS = 2  # Each peer gossips to at most this many random neighbors per round
+# Wall-clock cadence: every peer emits one gossip tuple to one random
+# stranger per interval. 5s = 720/hr = ~120k/wk per peer — natural rate
+# control with no forwarding and no flooding.
+GOSSIP_INTERVAL_S = 5.0
 MIN_PULLS_FOR_ELIMINATION = 10  # Don't eliminate until arm has been tried this many times
 ELIMINATION_THRESHOLD = 0.75  # Eliminate if reward < threshold * best_reward
 
@@ -83,43 +87,44 @@ def log(message: str) -> None:
 
 
 @dataclass
-class MABStatsMessage(DataClassPayload[10]):
-    """MAB statistics + model-availability advertisement.
+class GossipMessage(DataClassPayload[10]):
+    """One peer's most-recent observation of one arm, plus discovery info.
 
-    `tables` carries per-arm CRDT state. `advertisements` carries, for each
-    arm this peer can serve, a magnet URI, the model type, the metadata
-    JSON, and the libtorrent listen endpoint so the receiver can
-    `connect_peer` directly (no tracker / DHT dependency on localhost).
+    This is the *only* protocol message. Every gossip emission carries one
+    such tuple, sent to one random stranger every ~5s. There is no
+    forwarding by the receiver — spread is purely from each originator's
+    own periodic emission. Lamport gates ordering so duplicates and
+    out-of-order arrivals are no-ops.
+
+    The discovery channel is collapsed onto a 20-byte BitTorrent info-hash:
+    a receiver that doesn't yet have this arm reconstructs a magnet URI
+    locally as `magnet:?xt=urn:btih:<hex>` and pulls the artifact. The
+    `(host, port)` hint avoids a DHT round-trip for localhost transfers.
+    `metadata_json` is kept inline so the receiver can write a sibling
+    `meta.json` and load the model immediately on download.
+
+    Each message is atomically signed by the originator's IPv8 keypair.
+    `public_key` carries the wire-format public key bytes, `signature` is
+    a digital signature over a canonical byte serialisation of every
+    other field. Receivers verify (a) `sha1(public_key) == sender_key`
+    so the sender_key cannot be forged, and (b) the signature is valid
+    under that public key. Forged or unsigned messages are dropped.
     """
-    sender_id: int
-    tables: str            # JSON: {arm_name: {originator_id: {pulls, total_reward|alpha, beta}}}
-    advertisements: str    # JSON: {arm_name: {magnet, model_type, metadata_json, host, port}}
-
-
-@dataclass
-class ExclusionMessage(DataClassPayload[11]):
-    """Announcement that a model has been excluded."""
-    sender_id: int
-    model_name: str
-    reason: str
-    round_num: int
-
-
-@dataclass
-class NewModelMessage(DataClassPayload[12]):
-    """Announcement that a new model is available.
-
-    Carries the magnet + metadata + sender's libtorrent endpoint so the
-    receiver can pull the file on its own without waiting for the next
-    periodic gossip advertisement.
-    """
-    sender_id: int
-    model_name: str
-    magnet: str
-    metadata_json: str
+    sender_id: int           # IPv8 sender id (informational)
+    sender_key: str          # hex(mid); receiver verifies sha1(public_key) matches
+    arm_name: str
+    pulls: int
+    total_reward: float      # UCB1 evidence
+    alpha: float             # Thompson evidence (1.0 if unused)
+    beta: float              # Thompson evidence (1.0 if unused)
+    lamport: int             # strictly increasing per (sender_key, arm)
+    info_hash: bytes         # 20-byte BitTorrent info-hash (raw bytes)
+    metadata_json: str       # sibling meta.json contents
     model_type: str
     host: str
     port: int
+    public_key: bytes        # IPv8 public key in wire format
+    signature: bytes         # signature over canonical serialisation of fields above
 
 
 # Libtorrent listen-port range for each peer's seeder/leecher session.
@@ -238,6 +243,61 @@ def _write_meta_and_load(
     return model
 
 
+# ----------------------------------------------------------- gossip signing
+#
+# Each GossipMessage is atomically signed with the originator's IPv8
+# keypair. The serialised byte string used for signing covers every field
+# in the message except `public_key` and `signature` themselves, in a
+# fixed order with length-prefixed encoding so neither sender nor receiver
+# can disagree on what was signed. We deliberately don't trust the IPv8
+# transport-level encoding for this — building the canonical form here
+# means we control the binding precisely.
+
+_GOSSIP_DOMAIN = b"LTR-MAB-gossip-v1\x00"
+
+
+def _pack_bytes(b: bytes) -> bytes:
+    return struct.pack(">I", len(b)) + b
+
+
+def _pack_str(s: str) -> bytes:
+    return _pack_bytes(s.encode("utf-8"))
+
+
+def _gossip_canonical_bytes(
+    sender_id: int,
+    sender_key: str,
+    arm_name: str,
+    pulls: int,
+    total_reward: float,
+    alpha: float,
+    beta: float,
+    lamport: int,
+    info_hash: bytes,
+    metadata_json: str,
+    model_type: str,
+    host: str,
+    port: int,
+) -> bytes:
+    """Deterministic byte representation of a gossip payload for signing."""
+    return (
+        _GOSSIP_DOMAIN
+        + struct.pack(">q", int(sender_id))
+        + _pack_str(sender_key)
+        + _pack_str(arm_name)
+        + struct.pack(">q", int(pulls))
+        + struct.pack(">d", float(total_reward))
+        + struct.pack(">d", float(alpha))
+        + struct.pack(">d", float(beta))
+        + struct.pack(">q", int(lamport))
+        + _pack_bytes(info_hash)
+        + _pack_str(metadata_json)
+        + _pack_str(model_type)
+        + _pack_str(host)
+        + struct.pack(">i", int(port))
+    )
+
+
 class TorrentSeeder:
     """One libtorrent session per peer. Seeds local models and downloads
     magnets received via gossip advertisements.
@@ -272,18 +332,25 @@ class TorrentSeeder:
 
         # arm_name -> handle (seed) kept alive for the duration of the run.
         self._seed_handles: dict[str, Any] = {}
-        # arm_name -> magnet URI we published (for gossip).
+        # arm_name -> magnet URI we published (used internally for our own
+        # session bookkeeping; not transmitted on the wire — peers receive
+        # only the 20-byte info-hash and reconstruct the magnet themselves).
         self._magnets: dict[str, str] = {}
+        # arm_name -> raw 20-byte info-hash, the on-wire identifier.
+        self._info_hashes: dict[str, bytes] = {}
 
     # ----------------------------------------------------------- seed
 
-    def seed_model(self, arm_name: str, model_path: Path) -> str | None:
-        """Create a .torrent for `model_path`, add it as a seed, return magnet.
+    def seed_model(self, arm_name: str, model_path: Path) -> bytes | None:
+        """Create a .torrent for `model_path`, add it as a seed, return the
+        20-byte info-hash. Idempotent per arm_name.
 
-        Idempotent per arm_name. Returns the magnet URI on success.
+        We track the magnet URI internally for our own session, but only
+        the info-hash is exposed to callers — that's what rides the gossip
+        wire. Receivers reconstruct the magnet locally.
         """
-        if arm_name in self._magnets:
-            return self._magnets[arm_name]
+        if arm_name in self._info_hashes:
+            return self._info_hashes[arm_name]
 
         try:
             torrent_path = Path(str(model_path) + ".torrent")
@@ -303,16 +370,32 @@ class TorrentSeeder:
             # Ensure we're in seed-only mode for files already complete.
             handle.flags = handle.flags  # no-op; keeping libtorrent happy
             magnet = lt.make_magnet_uri(info)
+            ih_obj = info.info_hash()
+            # libtorrent's sha1_hash exposes raw bytes via to_bytes().
+            try:
+                info_hash = bytes(ih_obj.to_bytes())
+            except AttributeError:
+                # Older libtorrent: fall back to parsing the hex string.
+                info_hash = bytes.fromhex(str(ih_obj))
             self._seed_handles[arm_name] = handle
             self._magnets[arm_name] = magnet
-            log(f"[Peer {self._peer_id}] SEEDING {arm_name} magnet={magnet[:80]}…")
-            return magnet
+            self._info_hashes[arm_name] = info_hash
+            log(f"[Peer {self._peer_id}] SEEDING {arm_name} info_hash={info_hash.hex()}")
+            return info_hash
         except Exception as exc:
             log(f"[Peer {self._peer_id}] seed_model({arm_name}) failed: {exc}")
             return None
 
     def magnet_for(self, arm_name: str) -> str | None:
         return self._magnets.get(arm_name)
+
+    def info_hash_for(self, arm_name: str) -> bytes | None:
+        return self._info_hashes.get(arm_name)
+
+    @staticmethod
+    def magnet_from_info_hash(info_hash: bytes) -> str:
+        """Reconstruct a BitTorrent magnet URI from a 20-byte info-hash."""
+        return f"magnet:?xt=urn:btih:{info_hash.hex()}"
 
     def listen_endpoint(self) -> tuple[str, int]:
         """Return the (host, port) other peers should use in connect_peer.
@@ -410,9 +493,7 @@ class LTRMABCommunity(Community):
 
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
-        self.add_message_handler(MABStatsMessage, self.on_mab_stats)
-        self.add_message_handler(ExclusionMessage, self.on_exclusion)
-        self.add_message_handler(NewModelMessage, self.on_new_model)
+        self.add_message_handler(GossipMessage, self.on_gossip)
 
         # Model names heard about via gossip advertisements but whose
         # torrent we're still downloading. Held out of the bandit until
@@ -446,6 +527,10 @@ class LTRMABCommunity(Community):
             self.bandit = ThompsonSampling(model_names, peer_id=peer_id, seed=seed)
         else:
             self.bandit = UCB1(model_names, c=2.0, peer_id=peer_id, seed=seed)
+        # Cached Lamport stable identity used in outgoing gossip and
+        # accepted by receivers as the gating key. Falls back to peer_id
+        # before IPv8 has assigned `my_peer.mid`.
+        self._stable_key = peer_id
         self.active_models = set(model_names)
         self.excluded_models = set()
 
@@ -462,7 +547,7 @@ class LTRMABCommunity(Community):
         self.round_queries = 0
 
         # Seed every model we already have on disk. Their magnets will
-        # ride the very first MABStatsMessage so late-joiners pick them up.
+        # ride the first GossipMessage that picks them on rotation.
         for name in model_names:
             self._seed_existing_model(name)
 
@@ -534,9 +619,9 @@ class LTRMABCommunity(Community):
         if model_path is None:
             log(f"[Peer {self.peer_id}] seed: no on-disk file for arm '{search_name}' (scanned {MODELS_DIR})")
             return
-        magnet = self.seeder.seed_model(arm_name, model_path)
-        if not magnet:
-            log(f"[Peer {self.peer_id}] seed: seeder returned no magnet for {arm_name} ({model_path})")
+        info_hash = self.seeder.seed_model(arm_name, model_path)
+        if not info_hash:
+            log(f"[Peer {self.peer_id}] seed: seeder returned no info-hash for {arm_name} ({model_path})")
             return
         try:
             metadata = ModelMetadata.load(model_path)
@@ -548,89 +633,275 @@ class LTRMABCommunity(Community):
             return
         host, port = self.seeder.listen_endpoint()
         self._my_advertisements[arm_name] = {
-            "magnet": magnet,
+            "info_hash": info_hash,
             "model_type": metadata.type,
             "metadata_json": metadata_json,
             "host": host,
             "port": port,
         }
-        log(f"[Peer {self.peer_id}] seed: advertised {arm_name} (magnet={magnet[:60]}…, endpoint={host}:{port})")
+        log(f"[Peer {self.peer_id}] seed: advertised {arm_name} (info_hash={info_hash.hex()[:16]}…, endpoint={host}:{port})")
 
-    async def send_gossip(self) -> int:
-        """Send per-originator CRDT tables + model advertisements to a random subset of peers."""
+    def _stable_self_key(self) -> str:
+        """Stable per-peer identifier used in outgoing gossip and as the
+        Lamport gating key on receivers. We prefer IPv8's `my_peer.mid` —
+        a cryptographic identity that survives across community
+        reinitialisation within the same on-disk keyfile — falling back to
+        the in-process peer_id before IPv8 has finished setting up."""
+        try:
+            return self.my_peer.mid.hex()
+        except Exception:
+            return str(self.peer_id)
+
+    def _verify_gossip_signature(self, payload: GossipMessage) -> bool:
+        """Reject any message that isn't atomically signed by its claimed
+        originator. Three checks must all pass:
+
+        1. The public key in the message must hash (SHA1) to the claimed
+           `sender_key`. This pins the sender_key to a real keypair —
+           a forger can't pick an arbitrary mid because they don't have
+           the corresponding private key.
+        2. `default_eccrypto` must accept the public key bytes (i.e. they
+           parse as a valid IPv8 public key).
+        3. The signature must verify against the canonical byte
+           serialisation of every other field. Tampering with any field
+           in transit invalidates this.
+        """
+        pk_bin = payload.public_key
+        sig = payload.signature
+        if not pk_bin or not sig:
+            log(f"[Peer {self.peer_id}] DROPPED unsigned gossip from {payload.sender_key[:8]}")
+            return False
+
+        # Sender key must be the SHA1 mid of the public key.
+        try:
+            claimed_mid = bytes.fromhex(payload.sender_key)
+        except ValueError:
+            log(f"[Peer {self.peer_id}] DROPPED gossip with non-hex sender_key")
+            return False
+        if hashlib.sha1(pk_bin).digest() != claimed_mid:
+            log(f"[Peer {self.peer_id}] DROPPED gossip: sender_key/public_key mismatch")
+            return False
+
+        try:
+            public_key = default_eccrypto.key_from_public_bin(pk_bin)
+        except Exception as exc:
+            log(f"[Peer {self.peer_id}] DROPPED gossip: bad public key: {exc}")
+            return False
+
+        canonical = _gossip_canonical_bytes(
+            sender_id=int(payload.sender_id),
+            sender_key=payload.sender_key,
+            arm_name=payload.arm_name,
+            pulls=int(payload.pulls),
+            total_reward=float(payload.total_reward),
+            alpha=float(payload.alpha),
+            beta=float(payload.beta),
+            lamport=int(payload.lamport),
+            info_hash=payload.info_hash,
+            metadata_json=payload.metadata_json,
+            model_type=payload.model_type,
+            host=payload.host,
+            port=int(payload.port),
+        )
+        # IPv8's verify(...) returns the recovered message on success and
+        # raises on failure (libnacl-style) for some key types; M2Crypto
+        # returns a bool. Treat any exception as invalid; treat an
+        # explicit False as invalid; otherwise consider it a pass.
+        try:
+            verdict = public_key.verify(sig, canonical)
+        except Exception as exc:
+            log(f"[Peer {self.peer_id}] DROPPED gossip: signature verify error: {exc}")
+            return False
+        if verdict is False:
+            log(f"[Peer {self.peer_id}] DROPPED gossip: invalid signature from {payload.sender_key[:8]}")
+            return False
+        return True
+
+    def _pick_gossip_arm(self) -> str | None:
+        """Pick one random arm this peer is currently using.
+
+        Defensive dissemination: each emission advertises *one* arm the
+        sender uses — we don't push other peers' evidence on their behalf.
+        The arm choice rotates across the active set so every model gets
+        coverage over time without any single message carrying bulk state.
+        """
+        active = sorted(self.active_models)
+        if not active:
+            return None
+        idx = int(self._rng.integers(len(active)))
+        return active[idx]
+
+    def _pick_random_stranger(self) -> "Peer | None":
+        """Ask IPv8 for a peer we can talk to right now.
+
+        IPv8's RandomWalk strategy continuously churns the peer table, so
+        sampling one entry per gossip emission gives us a fresh stranger
+        on each cycle without us having to manage walks ourselves. Returns
+        None if no peers are connected yet.
+        """
         peers = self.get_peers()
         if not peers:
+            return None
+        idx = int(self._rng.integers(len(peers)))
+        return peers[idx]
+
+    async def send_gossip(self) -> int:
+        """Emit one tuple to one random stranger.
+
+        Per the defensive-dissemination model: no fan-out, no waves, no
+        forwarding by receivers. The next 5-second cycle will pick a
+        different arm and a different stranger, and so on. Long-run
+        coverage is guaranteed by the random walk + repetition; short-run
+        latency to any specific neighbour is amortised across cycles.
+        """
+        arm = self._pick_gossip_arm()
+        if arm is None:
+            return 0
+        target = self._pick_random_stranger()
+        if target is None:
             return 0
 
-        if len(peers) > MAX_GOSSIP_PEERS:
-            idx = self._rng.choice(len(peers), size=MAX_GOSSIP_PEERS, replace=False)
-            peers = [peers[i] for i in idx]
+        ad = self._my_advertisements.get(arm, {})
+        own = self.bandit.own_observation(arm)
+        if own is None:
+            return 0
+        # Ensure our outgoing Lamport is monotonically ahead of whatever
+        # the bandit last stamped for self-updates.
+        lamport = self.bandit.next_lamport()
 
-        msg = MABStatsMessage(
+        sender_key = self._stable_self_key()
+        info_hash = ad.get("info_hash", b"")
+        metadata_json = ad.get("metadata_json", "")
+        model_type = ad.get("model_type", "")
+        host = ad.get("host", "")
+        port = int(ad.get("port", 0))
+
+        # Build the canonical byte string for signing — must be byte-for-byte
+        # reproducible on the receiver so the signature verifies.
+        canonical = _gossip_canonical_bytes(
             sender_id=self.peer_id,
-            tables=json.dumps(self.bandit.get_originator_tables()),
-            advertisements=json.dumps(self._my_advertisements),
+            sender_key=sender_key,
+            arm_name=arm,
+            pulls=int(own.pulls),
+            total_reward=float(own.total_reward),
+            alpha=float(own.alpha),
+            beta=float(own.beta),
+            lamport=int(lamport),
+            info_hash=info_hash,
+            metadata_json=metadata_json,
+            model_type=model_type,
+            host=host,
+            port=port,
         )
+        public_key_bin = self.my_peer.public_key.key_to_bin()
+        signature = self.my_peer.key.signature(canonical)
 
-        for peer in peers:
-            self.ez_send(peer, msg)
+        msg = GossipMessage(
+            sender_id=self.peer_id,
+            sender_key=sender_key,
+            arm_name=arm,
+            pulls=int(own.pulls),
+            total_reward=float(own.total_reward),
+            alpha=float(own.alpha),
+            beta=float(own.beta),
+            lamport=int(lamport),
+            info_hash=info_hash,
+            metadata_json=metadata_json,
+            model_type=model_type,
+            host=host,
+            port=port,
+            public_key=public_key_bin,
+            signature=signature,
+        )
+        self.ez_send(target, msg)
+        return 1
 
-        return len(peers)
+    @lazy_wrapper(GossipMessage)
+    def on_gossip(self, peer: Peer, payload: GossipMessage) -> None:
+        """Single message handler for everything: stats + discovery.
 
-    @lazy_wrapper(MABStatsMessage)
-    def on_mab_stats(self, peer: Peer, payload: MABStatsMessage) -> None:
-        """Merge per-originator CRDT tables + kick off torrent downloads for
-        newly-advertised arms we don't yet have."""
-        remote_tables: dict[str, dict[str, dict]] = json.loads(payload.tables)
-        try:
-            advertisements: dict[str, dict] = json.loads(payload.advertisements or "{}")
-        except Exception:
-            advertisements = {}
+        Atomic verification first: every accepted message must carry a
+        valid signature from a public key whose `sha1` digest matches the
+        claimed `sender_key` (the IPv8 mid). This prevents impersonation
+        — a peer cannot forge gossip from someone else, and cannot tamper
+        with any field in transit without the signature failing.
 
-        merge_details = []
+        Statistics: gated by Lamport per (sender_key, arm) — strictly
+        increasing replaces, anything else dropped.
 
-        for arm, remote_orig_table in remote_tables.items():
-            # Deserialise raw dicts → OriginatorEntry objects
-            remote_entries: dict[str, OriginatorEntry] = {
-                origin: OriginatorEntry(
-                    pulls=d["pulls"],
-                    total_reward=d.get("total_reward", 0.0),
-                    alpha=d.get("alpha", 1.0),
-                    beta=d.get("beta", 1.0),
+        Discovery: if the arm is unknown locally and the message carries a
+        magnet, kick off a libtorrent download. Once the file lands and is
+        scored, the arm enters `bandit.own` and subsequent gossips for it
+        contribute to the aggregate.
+
+        We never re-emit. Spread happens because the originator keeps
+        gossiping the same tuple to fresh strangers every interval.
+        """
+        arm = payload.arm_name
+        if not arm:
+            return
+
+        if not self._verify_gossip_signature(payload):
+            return
+
+        if arm in self.bandit.own:
+            accepted = self.bandit.apply_gossip(
+                arm=arm,
+                sender=payload.sender_key,
+                pulls=int(payload.pulls),
+                total_reward=float(payload.total_reward),
+                alpha=float(payload.alpha),
+                beta=float(payload.beta),
+                lamport=int(payload.lamport),
+            )
+            if accepted:
+                log(
+                    f"[Peer {self.peer_id}] GOSSIP from {payload.sender_key[:8]}: "
+                    f"{arm} pulls={payload.pulls} reward={payload.total_reward:.3f} "
+                    f"L={payload.lamport}"
                 )
-                for origin, d in remote_orig_table.items()
-            }
+            return
 
-            if arm in self.bandit.tables:
-                old_n = sum(e.pulls for e in self.bandit.tables[arm].values())
-                self.bandit.crdt_merge(arm, remote_entries)
-                new_n = sum(e.pulls for e in self.bandit.tables[arm].values())
-                if new_n > old_n:
-                    merge_details.append(f"{arm}: {old_n}->{new_n} pulls")
-            else:
-                # Arm is advertised but we don't have its bytes. If the
-                # advertisement includes a magnet, kick off a torrent
-                # download; otherwise just note that we've heard about it
-                # and wait for a peer with a magnet to advertise.
-                ad = advertisements.get(arm)
-                if ad and "magnet" in ad:
-                    merge_details.append(f"{arm}: announced (downloading)")
-                    self._announced_models.add(arm)
-                    self._start_download_if_idle(arm, ad, payload.sender_id)
-                else:
-                    merge_details.append(f"{arm}: announced (no magnet yet)")
-                    self._announced_models.add(arm)
+        # Arm unknown locally. Kick off discovery via libtorrent if the
+        # advertisement is usable; otherwise drop and wait for a peer that
+        # also seeds this arm to gossip it later. The wire carries only a
+        # 20-byte info-hash; we reconstruct the magnet URI on this side.
+        if not payload.info_hash or len(payload.info_hash) != 20:
+            return
+        if arm in self._downloading:
+            return
 
-        if merge_details:
-            log(f"[Peer {self.peer_id}] GOSSIP RECEIVED from Peer {payload.sender_id}: merged [{', '.join(merge_details)}]")
+        magnet = TorrentSeeder.magnet_from_info_hash(payload.info_hash)
+        ad = {
+            "magnet": magnet,
+            "metadata_json": payload.metadata_json,
+            "model_type": payload.model_type,
+            "host": payload.host,
+            "port": int(payload.port),
+        }
+        self._announced_models.add(arm)
+        self._start_download_if_idle(arm, ad, payload.sender_id)
 
     def _start_download_if_idle(self, arm_name: str, ad: dict, sender_id: int) -> None:
-        """Dispatch a torrent download for `arm_name` unless one is already running."""
-        if arm_name in self.bandit.tables:
+        """Dispatch a torrent download for `arm_name` unless one is already running.
+
+        Short-circuit: if the proposed arm shares an underlying base model
+        with something we already have locally (e.g. the proposing peer
+        sent `lightgbm@abcd1234` and we've got the initial `lightgbm` on
+        disk), libtorrent would refuse the magnet as a duplicate info-hash.
+        We instead alias to the base's pre-computed scores and register
+        the arm in-process, skipping the network round-trip entirely.
+        """
+        if arm_name in self.bandit.own:
             self._announced_models.discard(arm_name)
             return
         if arm_name in self._downloading:
             return
+
+        if self._try_alias_to_local_base(arm_name, sender_id):
+            self._announced_models.discard(arm_name)
+            return
+
         self._downloading.add(arm_name)
 
         magnet = ad["magnet"]
@@ -652,6 +923,48 @@ class LTRMABCommunity(Community):
             save_dir=DOWNLOADS_DIR,
         ))
 
+    def _try_alias_to_local_base(self, unique_name: str, sender_id: int) -> bool:
+        """If `unique_name` is `<base>@<hex>` and we already have `<base>`
+        locally (with precomputed scores), register the unique arm by
+        aliasing to the base's model + scores. Returns True on success.
+
+        This handles the common case where two peers were started from
+        the same set of initial models on disk: they don't need to
+        re-fetch each other's identical artifacts via libtorrent (which
+        would fail due to colliding magnet info-hashes anyway).
+
+        Suppressed when the experiment sets `state["disable_alias"] = True`.
+        Useful for hot-swap experiments where the alias shortcut would
+        make discovery latency artificially zero — receivers should
+        actually take the libtorrent path so the gossip protocol's
+        propagation cadence shows up in the measured discovery round.
+        """
+        state = self._state
+        if state.get("disable_alias", False):
+            return False
+        if "@" not in unique_name:
+            return False
+        base = unique_name.rsplit("@", 1)[0]
+        scores_map = state.get("model_scores", {})
+        models_map = state.get("models", {})
+        if base not in scores_map or base not in models_map:
+            return False
+        scores_map[unique_name] = scores_map[base]
+        models_map[unique_name] = models_map[base]
+        # Now `add_model` will succeed since precomputed scores exist.
+        self.add_model(unique_name)
+        if self.on_event:
+            self.on_event(
+                f"NEW ARM aliased from local base '{base}' (announced by "
+                f"Peer {sender_id}): {unique_name}",
+                "round",
+            )
+        log(
+            f"[Peer {self.peer_id}] ALIASED {unique_name} -> local base "
+            f"'{base}' (skipped libtorrent; both refer to identical artifact)"
+        )
+        return True
+
     def _get_mean_reward(self, stats_entry: dict) -> float:
         """Get mean/expected reward from stats, works with both UCB1 and Thompson."""
         return stats_entry.get("mean_reward", stats_entry.get("expected_reward", 0.0))
@@ -667,10 +980,11 @@ class LTRMABCommunity(Community):
         if len(self.active_models) <= 1:
             return []
 
-        # Require minimum evidence before any arm is eligible
+        # Require minimum evidence before any arm is eligible. Pulls are
+        # aggregated across own + non-stale peer observations.
         active_with_pulls = {
             name for name in self.active_models
-            if sum(e.pulls for e in self.bandit.tables[name].values()) >= MIN_PULLS_FOR_ELIMINATION
+            if self.bandit._aggregate_pulls(name) >= MIN_PULLS_FOR_ELIMINATION
         }
         if len(active_with_pulls) <= 1:
             return []
@@ -711,38 +1025,10 @@ class LTRMABCommunity(Community):
         log(f"{'#'*70}")
         log(f"")
 
-    async def broadcast_exclusion(self, model_name: str, round_num: int, reason: str) -> None:
-        """Broadcast exclusion to a random subset of peers."""
-        msg = ExclusionMessage(
-            sender_id=self.peer_id,
-            model_name=model_name,
-            reason=reason,
-            round_num=round_num,
-        )
-        peers = self.get_peers()
-        if len(peers) > MAX_GOSSIP_PEERS:
-            idx = self._rng.choice(len(peers), size=MAX_GOSSIP_PEERS, replace=False)
-            peers = [peers[i] for i in idx]
-        for peer in peers:
-            self.ez_send(peer, msg)
-
-    @lazy_wrapper(ExclusionMessage)
-    def on_exclusion(self, peer: Peer, payload: ExclusionMessage) -> None:
-        """Handle exclusion announcement from peer."""
-        if payload.model_name in self.active_models:
-            self.active_models.remove(payload.model_name)
-            self.excluded_models.add(payload.model_name)
-            log(f"[Peer {self.peer_id}] ARM EXCLUDED (via gossip from Peer {payload.sender_id}): {payload.model_name}")
-            log(f"[Peer {self.peer_id}]   Reason: {payload.reason}")
-
-    def add_model(self, model_name: str, remote_table: dict[str, OriginatorEntry] | None = None) -> None:
-        """Hot-swap: add a new model to this peer's MAB and seed its torrent.
-
-        If remote_table is provided (received via gossip), the arm is seeded
-        with the neighbor's originator entries instead of a blank prior.
-        """
-        if model_name in self.bandit.tables:
-            log(f"[Peer {self.peer_id}] add_model({model_name}): already in bandit.tables, skipping")
+    def add_model(self, model_name: str) -> None:
+        """Hot-swap: add a newly-downloaded arm to this peer's MAB and seed it."""
+        if model_name in self.bandit.own:
+            log(f"[Peer {self.peer_id}] add_model({model_name}): already known, skipping")
             return
         state = self._state
         if model_name not in state["model_scores"]:
@@ -750,7 +1036,7 @@ class LTRMABCommunity(Community):
                 f"(available: {sorted(state.get('model_scores', {}).keys())})")
             return
 
-        self.bandit.add_arm(model_name, remote_table=remote_table)
+        self.bandit.add_arm(model_name)
         self.active_models.add(model_name)
         log(f"[Peer {self.peer_id}] HOT-SWAP: Added {model_name} to MAB")
         log(f"[Peer {self.peer_id}]   Active models: {sorted(self.active_models)}")
@@ -759,16 +1045,13 @@ class LTRMABCommunity(Community):
         self._seed_existing_model(model_name)
 
     async def propose_model(self, base_model_name: str) -> None:
-        """Register a model locally under a unique, per-peer name, ensure its
-        magnet is ready, then announce it to peers. Every proposal is treated
-        as a distinct arm (even if two peers propose the same base model, or
-        the same peer re-proposes it after leave/rejoin), so the arm name is
-        suffixed with a random token. A collision would require two 32-bit
-        random draws to match, which is astronomically unlikely at the
-        proposal rates we care about.
+        """Register a model locally under a unique, per-peer name and seed it.
 
-        The announcement is deferred until seeding succeeds so receivers
-        always get a usable advertisement on the same tick."""
+        There is no immediate announcement: the regular gossip cycle picks
+        this arm with the same probability as any other we use, so it
+        propagates to a fresh stranger every interval until coverage is
+        achieved. Random hex suffix guarantees uniqueness across peers and
+        across re-proposals within one process."""
         rand_suffix = os.urandom(4).hex()
         unique_name = f"{base_model_name}@{rand_suffix}"
 
@@ -782,7 +1065,7 @@ class LTRMABCommunity(Community):
             if "models" in state and base_model_name in state["models"]:
                 state.setdefault("models", {})[unique_name] = state["models"][base_model_name]
 
-        if unique_name in self.bandit.tables:
+        if unique_name in self.bandit.own:
             log(f"[Peer {self.peer_id}] PROPOSE skipped: {unique_name} already active")
             return
 
@@ -797,27 +1080,11 @@ class LTRMABCommunity(Community):
 
         ad = self._my_advertisements.get(unique_name)
         if ad is None:
-            log(f"[Peer {self.peer_id}] PROPOSE ABORTED: no magnet available for {unique_name} "
-                f"— peers cannot pull the file, skipping announcement")
+            log(f"[Peer {self.peer_id}] PROPOSE: no magnet for {unique_name} — peers will "
+                f"discover it once seeding succeeds on a future gossip cycle")
             return
-
-        peers = self.get_peers()
-        log(f"[Peer {self.peer_id}] PROPOSED {unique_name} — announcing to {len(peers)} peer(s) "
-            f"with magnet ready")
-        msg = NewModelMessage(
-            sender_id=self.peer_id,
-            model_name=unique_name,
-            magnet=ad["magnet"],
-            metadata_json=ad["metadata_json"],
-            model_type=ad["model_type"],
-            host=ad["host"],
-            port=int(ad["port"]),
-        )
-        if len(peers) > MAX_GOSSIP_PEERS:
-            idx = self._rng.choice(len(peers), size=MAX_GOSSIP_PEERS, replace=False)
-            peers = [peers[i] for i in idx]
-        for p in peers:
-            self.ez_send(p, msg)
+        log(f"[Peer {self.peer_id}] PROPOSED {unique_name} — will be advertised on next "
+            f"gossip cycle")
 
     async def _download_and_materialize(
         self,
@@ -887,58 +1154,6 @@ class LTRMABCommunity(Community):
         finally:
             self._downloading.discard(model_name)
 
-    @lazy_wrapper(NewModelMessage)
-    def on_new_model(self, peer: Peer, payload: NewModelMessage) -> None:
-        """Handle new model announcement from a peer: pull the file via the
-        advertised magnet (into DOWNLOADS_DIR), materialise it, then forward
-        the announcement to neighbours so it reaches the rest of the swarm."""
-        model_name = payload.model_name
-        log(f"[Peer {self.peer_id}] on_new_model: {model_name} from Peer {payload.sender_id} "
-            f"(already_have={model_name in self.bandit.tables})")
-        if model_name in self.bandit.tables:
-            return
-        if model_name in self._downloading:
-            return
-
-        if self.on_event:
-            self.on_event(
-                f"NEW ARM announced by Peer {payload.sender_id}: {model_name} — downloading",
-                "round",
-            )
-
-        self._downloading.add(model_name)
-        self._announced_models.add(model_name)
-        extra_peer = (payload.host, int(payload.port)) if payload.host and payload.port else None
-        asyncio.get_event_loop().create_task(
-            self._download_and_materialize(
-                model_name,
-                payload.magnet,
-                payload.metadata_json,
-                payload.model_type,
-                extra_peer,
-                payload.sender_id,
-                save_dir=DOWNLOADS_DIR,
-            )
-        )
-
-        # Forward to neighbors (epidemic gossip) — keep the magnet + endpoint
-        # so the next hop can also pull directly.
-        msg = NewModelMessage(
-            sender_id=self.peer_id,
-            model_name=model_name,
-            magnet=payload.magnet,
-            metadata_json=payload.metadata_json,
-            model_type=payload.model_type,
-            host=payload.host,
-            port=int(payload.port),
-        )
-        peers = self.get_peers()
-        if len(peers) > MAX_GOSSIP_PEERS:
-            idx = self._rng.choice(len(peers), size=MAX_GOSSIP_PEERS, replace=False)
-            peers = [peers[i] for i in idx]
-        for p in peers:
-            self.ez_send(p, msg)
-
     def print_arm_stats(self) -> None:
         """Print current arm statistics."""
         stats = self.bandit.get_stats()
@@ -980,6 +1195,7 @@ async def run_local_experiment(
     metric: str = "ndcg",
     dashboard_state=None,
     seed: int | None = None,
+    disable_alias: bool = False,
 ) -> None:
     """Run local experiment with N peers and R rounds."""
     # Caller can override the module-level SEED for per-run reproducibility.
@@ -1081,6 +1297,14 @@ async def run_local_experiment(
         "algorithm": algorithm,
         "metric": metric,
         "seed": seed,
+        "disable_alias": disable_alias,
+        # Needed by the torrent-download materialize path to score an arm
+        # fetched from a peer. Without these, _download_and_materialize
+        # bails at "shared state missing" and the arm never enters the
+        # bandit (the alias shortcut sidesteps this, but real transfers
+        # require it).
+        "X_test": X_test,
+        "y_test": y_test,
     }
     LTRMABCommunity.set_state(state)
 
@@ -1166,20 +1390,22 @@ async def run_local_experiment(
             await proposer.propose_model(hotswap_model_name)
             await sleep(0.5)  # let announcement propagate
 
-        # Gossip phase
+        # Gossip phase. Each peer emits one tuple to one random stranger;
+        # we run several cycles per round here purely to compress simulated
+        # wall-clock time (the live thread driver paces these to one per
+        # GOSSIP_INTERVAL_S in real deployments).
         if gossip_enabled:
             dashboard_state.phase = "gossiping"
             log(f"\n--- Gossip Phase (Round {round_num}) ---")
-            for gossip_round in range(1, GOSSIP_ROUNDS + 1):
-                log(f"[Gossip round {gossip_round}/{GOSSIP_ROUNDS}]")
-                for comm in communities:
-                    n_peers = await comm.send_gossip()
-                    if n_peers > 0:
-                        stats = comm.bandit.get_stats()
-                        total_pulls = sum(s["pulls"] for s in stats.values())
-                        log(f"[Peer {comm.peer_id}] GOSSIP SENT to {n_peers} peers (total_pulls={total_pulls})")
-                        dashboard_state.event(f"Peer {comm.peer_id} gossiped to {n_peers} peers", "gossip")
-                await sleep(GOSSIP_DELAY)
+            # One gossip per peer per round: each round corresponds 1:1 to a
+            # GOSSIP_INTERVAL_S wall-clock tick in the live protocol. Each
+            # peer picks one random own-arm and one random stranger.
+            for comm in communities:
+                sent = await comm.send_gossip()
+                if sent:
+                    log(f"[Peer {comm.peer_id}] gossiped one tuple to a random stranger")
+                    dashboard_state.event(f"Peer {comm.peer_id} gossiped", "gossip")
+            await sleep(0.1)
         else:
             log(f"\n--- Gossip Phase (Round {round_num}) --- SKIPPED (disabled)")
             dashboard_state.event("Gossip skipped (disabled)", "info")
@@ -1190,6 +1416,11 @@ async def run_local_experiment(
             comm.print_arm_stats()
 
         # Survival check (exclusion phase)
+        # Each peer reaches its own verdict from the gossiped CRDT evidence it
+        # has merged so far. There is no exclusion broadcast — that would let
+        # a single bad actor evict the strongest arm by simply announcing it
+        # excluded. Agreement on which arm to drop comes from peers seeing the
+        # same evidence, not from explicit exclusion messages.
         dashboard_state.phase = "survival"
         log(f"\n--- Survival Check (Round {round_num}) ---")
         all_excluded = set()
@@ -1200,8 +1431,6 @@ async def run_local_experiment(
                     all_excluded.add(model_name)
                     lcb, ucb = comm.bandit.confidence_bounds(model_name)
                     reason = f"UCB={ucb:.3f} < best_LCB"
-                    if gossip_enabled:
-                        await comm.broadcast_exclusion(model_name, round_num, reason)
                     dashboard_state.event(f"ARM EXCLUDED: {model_name} ({reason})", "exclusion")
                     await sleep(0.1)
 
@@ -1212,11 +1441,17 @@ async def run_local_experiment(
         arm_pulls = {}  # arm -> total pulls across all peers
         arm_reward_sum = {}  # arm -> sum of mean_rewards across peers
         arm_reward_count = {}  # arm -> number of peers that have stats for this arm
+        # Per-peer per-arm cumulative pulls for this round — used by Exp 3 to
+        # measure when each specific peer first discovers a new arm.
+        per_peer_pulls: dict[int, dict[str, int]] = {}
         total_cumulative_reward = 0.0
         total_queries_all = 0
 
         for comm in communities:
             stats = comm.bandit.get_stats()
+            per_peer_pulls[comm.peer_id] = {
+                name: int(s["pulls"]) for name, s in stats.items()
+            }
             for name, s in stats.items():
                 arm_pulls[name] = arm_pulls.get(name, 0) + s["pulls"]
                 mr = comm._get_mean_reward(s)
@@ -1236,6 +1471,7 @@ async def run_local_experiment(
         round_snapshot = {
             "round": round_num,
             "arm_pulls": arm_pulls,
+            "per_peer_pulls": per_peer_pulls,
             "arm_mean_reward": {
                 name: round(arm_reward_sum[name] / arm_reward_count[name], 4)
                 for name in arm_reward_sum
