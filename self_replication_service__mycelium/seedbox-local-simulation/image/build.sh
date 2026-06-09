@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MYCELIUM_CODE="$(cd "${SCRIPT_DIR}/../../../mycelium/code" && pwd)"
+MYCELIUM_CODE="$(cd "${SCRIPT_DIR}/../../mycelium/code" && pwd)"
 
 BUILDER="mycelium-builder"
 ALIAS="mycelium-base"

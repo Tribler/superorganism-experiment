@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make lib/ importable
+
 from lib.config import CFG
 from lib.provisioner import SporeStackClient, SporeStackError
 from lib.wallet import BitcoinWallet, InsufficientFundsError, WalletError
@@ -196,7 +198,7 @@ def wait_for_confirmation(client: SporeStackClient, initial_balance: int, timeou
 
     print("\nTimeout waiting for confirmation.")
     print("The payment may still be processing. Check balance later with:")
-    print("  python fund_sporestack.py balance")
+    print("  python bootstrap-scripts/fund_sporestack.py balance")
     return False
 
 
@@ -208,7 +210,7 @@ def main():
     command = sys.argv[1] if len(sys.argv) > 1 else "fund"
 
     if command == "help":
-        print("\nUsage: python fund_sporestack.py [command]")
+        print("\nUsage: python bootstrap-scripts/fund_sporestack.py [command]")
         print("\nCommands:")
         print("  fund [amount]  - Fund SporeStack account (default: $10)")
         print("  balance        - Check SporeStack balance only")
@@ -245,7 +247,7 @@ def main():
 
         if not wallet.exists():
             print(f"\nWallet '{wallet_name}' does not exist.")
-            print("Create one first with: python wallet.py create mycelium")
+            print("Create one first with: python bootstrap-scripts/wallet.py create mycelium")
             return
 
         wallet.load()
@@ -267,7 +269,7 @@ def main():
                 wait_for_confirmation(client, initial_ss_balance)
             else:
                 print("\nYou can check your balance later with:")
-                print("  python fund_sporestack.py balance")
+                print("  python bootstrap-scripts/fund_sporestack.py balance")
 
         # Final balance check
         print("\n" + "=" * 60)
@@ -277,7 +279,7 @@ def main():
 
     else:
         print(f"Unknown command: {command}")
-        print("Run 'python fund_sporestack.py help' for usage")
+        print("Run 'python bootstrap-scripts/fund_sporestack.py help' for usage")
 
 
 if __name__ == "__main__":

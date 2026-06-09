@@ -3,13 +3,16 @@
 
 import logging
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make lib/ importable
 
 from lib.wallet import BitcoinWallet, create_wallet_interactive
 
 logging.basicConfig(level=logging.INFO)
 
 if len(sys.argv) < 2:
-    print("Usage: python wallet.py <command> [args]")
+    print("Usage: python bootstrap-scripts/wallet.py <command> [args]")
     print("Commands:")
     print("  create <name>     - Create new wallet")
     print("  load <name>       - Load existing wallet")

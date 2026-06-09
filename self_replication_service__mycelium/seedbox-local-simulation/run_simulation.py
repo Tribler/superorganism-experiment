@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 
 SIM_DIR = pathlib.Path(__file__).resolve().parent
-BOOTSTRAP_DIR = SIM_DIR.parent
+BOOTSTRAP_DIR = SIM_DIR.parent / "seedbox-bootstrap"
 SIM_HOME = pathlib.Path.home() / ".mycelium-sim"
 LOG_DIR = SIM_HOME / "logs"
 

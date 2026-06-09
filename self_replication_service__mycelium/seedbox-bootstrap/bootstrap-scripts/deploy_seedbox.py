@@ -9,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make lib/ importable
+
 from lib.config import CFG
 from lib.deployer import Deployer, DeployerError
 from lib.wallet import BitcoinWallet
@@ -24,8 +26,8 @@ LOG_ENDPOINT_FILE = CFG["log_endpoint_file"]
 LOG_SECRET_FILE = CFG["log_secret_file"]
 SPORESTACK_TOKEN_FILE = CFG["token_file"]
 DEFAULT_SSH_KEY_PATH = CFG["ssh_key_path"]
-DEFAULT_VIDEO_IDS_FILE = Path(__file__).parent / "yt-cc-dataset-id-extraction" / "cc_video_ids.txt"
-DEFAULT_COOKIES_FILE = Path(__file__).parent / "yt_cookies.txt"
+DEFAULT_VIDEO_IDS_FILE = Path(__file__).parent.parent / "yt-cc-dataset-id-extraction" / "cc_video_ids.txt"
+DEFAULT_COOKIES_FILE = Path(__file__).parent.parent / "yt_cookies.txt"
 
 
 def load_server_info() -> dict | None:
@@ -181,8 +183,8 @@ Server info is loaded from ~/.mycelium/server.json (created by acquire_vps.py).
 Use --host to override or deploy to any server.
 
 Examples:
-  python deploy_mycelium.py                     # Deploy to saved server
-  python deploy_mycelium.py --host 95.179.1.1   # Deploy to specific IP
+  python bootstrap-scripts/deploy_seedbox.py                     # Deploy to saved server
+  python bootstrap-scripts/deploy_seedbox.py --host 95.179.1.1   # Deploy to specific IP
         """
     )
 
@@ -206,13 +208,13 @@ Examples:
             logger.info(f"Using saved server: {host}:{ssh_port}")
         else:
             logger.error(f"No server info found at {SERVER_INFO_FILE}")
-            logger.error("Run 'python acquire_vps.py' first, or specify --host")
+            logger.error("Run 'python bootstrap-scripts/acquire_vps.py' first, or specify --host")
             sys.exit(1)
 
     # Load cold-wallet fallback address — required before deploying
     default_btc_address = load_default_btc_address()
     if not default_btc_address:
-        logger.error("No default BTC address — create a local wallet with: python wallet.py create mycelium")
+        logger.error("No default BTC address — create a local wallet with: python bootstrap-scripts/wallet.py create mycelium")
         sys.exit(1)
 
     # Deploy

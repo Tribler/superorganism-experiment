@@ -10,7 +10,7 @@ Autonomous BitTorrent orchestrator that seeds Creative Commons content.
 
 ## Deployment
 
-This is deployed to a SporeStack VPS via `mycelium-bootstrap/`. See that directory for deployment instructions.
+This is deployed to a SporeStack VPS via `seedbox-bootstrap/`. See that directory for deployment instructions.
 
 ## Running locally
 

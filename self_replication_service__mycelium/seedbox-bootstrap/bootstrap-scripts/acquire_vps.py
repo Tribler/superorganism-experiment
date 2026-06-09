@@ -7,6 +7,8 @@ import logging
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make lib/ importable
+
 from lib.config import CFG
 from lib.deployer import generate_ssh_keypair
 from lib.provisioner import SporeStackClient, SporeStackError
@@ -51,7 +53,7 @@ def get_or_create_ssh_key(key_path: Path) -> tuple[str, str]:
 
 
 def save_server_info(info: dict) -> None:
-    """Save server info for use by deploy_mycelium.py."""
+    """Save server info for use by deploy_seedbox.py."""
     SERVER_INFO_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(SERVER_INFO_FILE, "w") as f:
         json.dump(info, f, indent=2)
@@ -132,7 +134,7 @@ def acquire(
     print(f"IP Address: {host}")
     print(f"SSH: ssh -i {private_key_path} root@{ssh_host}")
     print()
-    print("Next step: python deploy_mycelium.py")
+    print("Next step: python bootstrap-scripts/deploy_seedbox.py")
     print("=" * 60)
 
     return server_info
@@ -143,9 +145,9 @@ def main():
         description="Acquire a VPS from SporeStack",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Run 'python fund_sporestack.py fund <amount>' first to fund your account.
+Run 'python bootstrap-scripts/fund_sporestack.py fund <amount>' first to fund your account.
 
-After acquiring a VPS, run 'python deploy_mycelium.py' to deploy.
+After acquiring a VPS, run 'python bootstrap-scripts/deploy_seedbox.py' to deploy.
         """
     )
 
@@ -177,7 +179,7 @@ After acquiring a VPS, run 'python deploy_mycelium.py' to deploy.
     token = args.token or load_token()
     if not token:
         logger.error("SporeStack token not found.")
-        logger.error("Run 'python fund_sporestack.py' first to create and save token.")
+        logger.error("Run 'python bootstrap-scripts/fund_sporestack.py' first to create and save token.")
         sys.exit(1)
 
     try:

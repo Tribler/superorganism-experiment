@@ -323,7 +323,6 @@ pyrightconfig.json
 CLAUDE.md
 .claude
 context/
-bootstrap_scripts/
 
 code/utils/logger
 
@@ -332,7 +331,6 @@ code/utils/logger
 logs/
 data/
 CreativeCommonsMusic/*
-sim/analysis/lineage_frames/*
 *.torrent
 *.pdf
 *.png
@@ -364,4 +362,3 @@ yt-cc-dataset-id-extraction/cc_video_ids.txt
 *.gif
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,jetbrains+all,python,jupyternotebooks,vagrant,nativescript
 
-sim/db/

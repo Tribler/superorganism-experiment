@@ -97,7 +97,7 @@ class Config:
         str(128 * 1024 if SIM_MODE else 1024 * 1024),
     ))
 
-    # SporeStack / VPS provisioning defaults (injected by deployer; mirror mycelium-bootstrap/config.json)
+    # SporeStack / VPS provisioning defaults (injected by deployer; mirror seedbox-bootstrap/config.json)
     VPS_PROVIDER: str      = os.getenv("MYCELIUM_VPS_PROVIDER", "sporestack_eu")
     VPS_FLAVOR: str        = os.getenv("MYCELIUM_VPS_FLAVOR", "sporestack-eu-4gb")
     VPS_REGION: str        = os.getenv("MYCELIUM_VPS_REGION", "amsterdam")

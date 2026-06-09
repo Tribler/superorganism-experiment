@@ -1,0 +1,19 @@
+# Local simulation runtime artifacts (relocated from seedbox-bootstrap/.gitignore
+# when sim/ moved out to become seedbox-local-simulation/)
+__pycache__/
+*.pyc
+.claude
+
+# Event logs and run archives
+data/
+*.log
+
+*.gif
+*.png
+*.pdf
+
+# Regtest chain data
+db/
+
+# Generated lineage animation frames (keep analysis/*.ipynb tracked)
+analysis/lineage_frames/*
