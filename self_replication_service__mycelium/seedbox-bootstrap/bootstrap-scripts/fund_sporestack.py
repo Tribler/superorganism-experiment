@@ -271,7 +271,6 @@ def main():
                 print("\nYou can check your balance later with:")
                 print("  python bootstrap-scripts/fund_sporestack.py balance")
 
-        # Final balance check
         print("\n" + "=" * 60)
         print("Final balances:")
         check_wallet_balance(wallet)

@@ -126,7 +126,6 @@ class Deployer:
         else:
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        # Load private key (auto-detect key type)
         private_key = self._load_private_key()
 
         last_error = None
@@ -179,7 +178,6 @@ class Deployer:
         stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
 
         if background:
-            # Don't wait for exit status on background commands
             return "", "", 0
 
         exit_code = stdout.channel.recv_exit_status()
@@ -208,10 +206,8 @@ class Deployer:
         """Upload a directory using rsync over SSH."""
         logger.info(f"Uploading directory {local_path} -> {remote_path}")
 
-        # Ensure remote directory exists
         self.run_command(f"mkdir -p {remote_path}")
 
-        # Use rsync for efficient directory sync
         rsync_cmd = [
             "rsync", "-avz", "--progress",
             "-e", f"ssh -i {self.ssh_key_path} -p {self.port} -o StrictHostKeyChecking=yes -o UserKnownHostsFile={self.known_hosts_path}",

@@ -61,7 +61,6 @@ class SporeStackClient:
         try:
             response = self.session.request(method, url, **kwargs)
 
-            # Log request details for debugging
             logger.debug(f"{method} {url} -> {response.status_code}")
 
             if response.status_code >= 400:
@@ -76,7 +75,7 @@ class SporeStackClient:
                     f"API error ({response.status_code}): {error_msg}"
                 )
 
-            if response.status_code == 204:  # No content
+            if response.status_code == 204:
                 return {}
 
             return response.json()

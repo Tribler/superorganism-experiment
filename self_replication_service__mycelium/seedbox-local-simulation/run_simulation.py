@@ -176,9 +176,7 @@ def start_mock_sporestack(cfg: dict) -> None:
         "MYCELIUM_SIM_MOCK_PORT":           str(net["mock_sporestack_port"]),
         "MYCELIUM_SIM_BOOTSTRAP_PORT":      str(net["ipv8_bootstrap_port"]),
         "MYCELIUM_SIM_LXC_BRIDGE":          net["lxc_bridge"],
-        # Event-collector wiring for the reaper's server_expired posts. The
-        # collector binds 0.0.0.0:<port>, so the host-side mock reaches it via
-        # 127.0.0.1. Same envelope/secret contract as the containers.
+        # Host-side mock reaches the collector via 127.0.0.1 (collector binds 0.0.0.0). Same API contract as containers.
         "MYCELIUM_LOG_ENDPOINT":            f"http://127.0.0.1:{net['event_collector_port']}",
         "MYCELIUM_LOG_SECRET":              EVENT_API_KEY,
         # Interval defaults applied to every spawned node
@@ -251,9 +249,7 @@ def _lxc_ipv4(name: str) -> str:
 
 def launch_ipv8_bootstrap(cfg: dict) -> str:
     _log("launching IPv8 bootstrap container...")
-    # Always start fresh — a half-stuck container from a prior crashed run
-    # carries no state worth keeping, and reusing one whose tracker died
-    # mid-run hides the failure mode behind a successful-looking netstat.
+    # Always fresh — reusing a crashed container hides tracker failures behind a passing netstat.
     if _lxc_instance(IPV8_BOOTSTRAP_NAME) is not None:
         subprocess.run(
             ["lxc", "delete", "--force", IPV8_BOOTSTRAP_NAME],
@@ -273,11 +269,8 @@ def launch_ipv8_bootstrap(cfg: dict) -> str:
     if not ip:
         raise RuntimeError("ipv8-bootstrap container never got an IPv4 within 30s")
 
-    # Wait for openrc init to finish before kicking the tracker. Without this,
-    # `lxc exec` lands in a half-booted container where backgrounded processes
-    # get reaped before they bind — observed as `/root/logs/` missing entirely
-    # after a "kick" that appeared to succeed at the host level. getty is the
-    # last service alpine starts, so its presence means init is settled.
+    # Wait for init: backgrounded processes in a half-booted container get reaped before binding (observed).
+    # getty is the last alpine service — its presence means init is settled.
     deadline = time.time() + 20
     while time.time() < deadline:
         try:
@@ -291,12 +284,8 @@ def launch_ipv8_bootstrap(cfg: dict) -> str:
             pass
         time.sleep(0.5)
 
-    # Image entrypoint isn't PID 1 (no openrc service for the tracker), so
-    # `lxc start` leaves the tracker un-started. Mirror mock_sporestack's
-    # mycelium boot pattern: detach via `lxc exec ... nohup &`. Re-kick every
-    # iter until netstat confirms UDP/<port> is listening — once one tracker
-    # binds, subsequent kicks fail at bind() and exit, harmless. busybox-alpine
-    # ships `netstat`; iproute2's `ss` is not in the bootstrap image.
+    # No PID 1 entrypoint — kick manually via nohup. Idempotent: re-binding fails harmlessly.
+    # Use netstat (busybox), not ss (iproute2 absent in bootstrap image).
     bootstrap_port = cfg["network"]["ipv8_bootstrap_port"]
     kick_cmd = [
         "lxc", "exec", IPV8_BOOTSTRAP_NAME, "--",

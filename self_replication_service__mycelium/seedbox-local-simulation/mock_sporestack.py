@@ -80,8 +80,7 @@ EVENT_COLLECTOR_PORT = int(os.getenv("MYCELIUM_SIM_EVENT_COLLECTOR_PORT", "8765"
 IPV8_BOOTSTRAP_INSTANCE = os.getenv("MYCELIUM_SIM_BOOTSTRAP_INSTANCE", "ipv8-bootstrap")
 IPV8_BOOTSTRAP_PORT = int(os.getenv("MYCELIUM_SIM_BOOTSTRAP_PORT", "7759"))
 
-# Mycelium interval defaults injected into every spawned node.
-# These are set by run_simulation.py from sim_config.toml via env vars.
+# Interval defaults for every spawned node, set by run_simulation.py from sim_config.toml.
 _SIM_DECISION_INTERVAL      = os.getenv("MYCELIUM_SIM_DECISION_INTERVAL",      "30")
 _SIM_HEARTBEAT_INTERVAL     = os.getenv("MYCELIUM_SIM_HEARTBEAT_INTERVAL",      "5")
 _SIM_PEER_REGISTRY_TTL      = os.getenv("MYCELIUM_SIM_PEER_REGISTRY_TTL",       "30")
@@ -365,8 +364,7 @@ def _build_sim_env_lines(env: dict, secrets_in: dict, container_ipv4: str) -> st
     enriched["MYCELIUM_SIM_MODE"] = "1"
     enriched["MYCELIUM_SPORESTACK_BASE_URL"] = f"http://{bridge_ip}:{BIND_PORT}"
     enriched["MYCELIUM_BITCOIN_NETWORK"] = "regtest"
-    # Alpine's openssl is built without binary EC curves (no-ec2m), so IPv8's
-    # default 'medium' (sect409k1) fails. curve25519 uses libnacl, sidestepping openssl.
+    # Alpine openssl lacks no-ec2m, breaking IPv8's default 'medium' (sect409k1); curve25519 uses libnacl instead.
     enriched["MYCELIUM_IPV8_CURVE"] = "curve25519"
     enriched["MYCELIUM_BTC_USD_RATE"] = str(BTC_USD)
     enriched["MYCELIUM_VPS_MONTHLY_COST_CENTS"] = str(MONTHLY_COST_CENTS)

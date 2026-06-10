@@ -194,7 +194,6 @@ Examples:
 
     args = parser.parse_args()
 
-    # Determine host
     host = args.host
     ssh_port = args.port
     ssh_key = args.ssh_key
@@ -211,13 +210,11 @@ Examples:
             logger.error("Run 'python bootstrap-scripts/acquire_vps.py' first, or specify --host")
             sys.exit(1)
 
-    # Load cold-wallet fallback address — required before deploying
     default_btc_address = load_default_btc_address()
     if not default_btc_address:
         logger.error("No default BTC address — create a local wallet with: python bootstrap-scripts/wallet.py create mycelium")
         sys.exit(1)
 
-    # Deploy
     try:
         deploy(
             host=host,

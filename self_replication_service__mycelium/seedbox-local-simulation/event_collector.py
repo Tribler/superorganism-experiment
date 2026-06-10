@@ -18,9 +18,7 @@ from flask import Flask, request, jsonify
 
 SIM_DIR = pathlib.Path(__file__).resolve().parent
 
-# Direct JSON-RPC to bitcoind (creds mirror sim/btc/faucet.py and miner.py). The
-# wallet-scoped path targets the same wallet faucet.py funds from. Used by the
-# daily faucet drip to issue one batched `sendmany` instead of N subprocess sends.
+# Same wallet as faucet.py/miner.py — drip uses one batched sendmany instead of N subprocess calls.
 BTC_RPC_URL = "http://127.0.0.1:18443/wallet/mycelium-regtest"
 _BTC_RPC_AUTH = base64.b64encode(b"mycelium:regtest").decode()
 
@@ -43,16 +41,12 @@ BIND_HOST = "0.0.0.0"  # bind to lxdbr0 too so containers can POST events from t
 BIND_PORT = 8765
 _RUN_TS = datetime.now().strftime("%d-%m-%Y-%H:%M")
 EVENTS_FILE = SIM_DIR / "data" / f"{_RUN_TS}.jsonl"
-# Matches what the bootstrapper writes to ~/.mycelium/log_secret and injects as
-# MYCELIUM_LOG_SECRET on every node. It's just a logging endpoint, not real auth.
+# Matches MYCELIUM_LOG_SECRET on every node — logging endpoint, not real auth.
 API_KEY = "123456789"
 _REQUIRED_KEYS = ("timestamp", "node", "event", "data")
 _lock = threading.Lock()
 
-# Periodic economy faucet — see sim_config.toml [genesis] faucet_* knobs. The
-# collector is the natural host for this: it already sees every state_snapshot
-# (which carries the BTC address) and every server_expired (emitted by
-# mock_sporestack when a container is reaped).
+# Faucet lives here: collector already sees state_snapshots (BTC addresses) and server_expired events.
 TIME_SCALE              = float(os.getenv("MYCELIUM_SIM_TIME_SCALE", "1"))
 BTC_USD                 = float(os.getenv("MYCELIUM_SIM_BTC_USD", "0"))
 MONTHLY_COST_CENTS      = float(os.getenv("MYCELIUM_SIM_MONTHLY_COST_CENTS", "0"))
@@ -62,16 +56,11 @@ FAUCET_MIN_FLOOR        = float(os.getenv("MYCELIUM_SIM_FAUCET_MIN_FLOOR", "0.5"
 FAUCET_DAYS_PER_MONTH   = float(os.getenv("MYCELIUM_SIM_FAUCET_DAYS_PER_MONTH", "30"))
 FAUCET_PAUSE_THRESHOLD  = int(os.getenv("MYCELIUM_SIM_FAUCET_PAUSE_THRESHOLD", "50"))
 FAUCET_RESUME_THRESHOLD = int(os.getenv("MYCELIUM_SIM_FAUCET_RESUME_THRESHOLD", "40"))
-# Heartbeat-window eviction: server_expired only fires for reaper-driven expiry,
-# so crashes/kills/failsafes leave ghosts in _live_nodes. Mirror the notebook's
-# sliding-window definition by evicting entries that haven't snapshotted in
-# LIVE_TIMEOUT_HEARTBEATS heartbeats.
+# server_expired only fires for clean reaper expiry — crashes leave ghosts; evict on missed heartbeats.
 HEARTBEAT_INTERVAL_S    = float(os.getenv("MYCELIUM_SIM_HEARTBEAT_INTERVAL", "10"))
 LIVE_TIMEOUT_HEARTBEATS = float(os.getenv("MYCELIUM_SIM_LIVE_TIMEOUT_HEARTBEATS", "10"))
 LIVE_NODE_TIMEOUT_S     = HEARTBEAT_INTERVAL_S * LIVE_TIMEOUT_HEARTBEATS
-# A missed-heartbeat window only *triggers* a funding evaluation; the actual reap
-# is funding-gated. We project the node's last-known runway forward by the elapsed
-# wall-time (converted to sim-days) and reap only once it crosses this floor.
+# Eviction is funding-gated: project runway forward by elapsed sim-time, reap only below floor.
 REAP_RUNWAY_FLOOR_DAYS  = float(os.getenv("MYCELIUM_SIM_REAP_RUNWAY_FLOOR_DAYS", "0"))
 MOCK_SPORESTACK_URL     = os.getenv(
     "MYCELIUM_SIM_SPORESTACK_URL",
@@ -108,9 +97,7 @@ def _update_live_nodes(event_name: str, node: str, data: dict) -> None:
             prev = _live_nodes.get(node)
             prev_addr = prev.addr if prev else ""
             new_addr = addr if isinstance(addr, str) and addr else prev_addr
-            # Carry the previous value forward when a field is absent from this
-            # snapshot (mirrors the prev_addr pattern) so a partial heartbeat
-            # never erases known-good runway inputs.
+            # Absent fields carry forward so a partial heartbeat never erases known-good runway inputs.
             total_runway = data.get("total_runway_days")
             if total_runway is None:
                 total_runway = prev.total_runway_days if prev else None
@@ -289,8 +276,7 @@ def _faucet_drip_loop() -> None:
             per_node[name] = share
             if not addr:
                 continue  # node alive but hasn't reported a BTC address yet
-            # Sum if two nodes ever report the same address — sendmany keys must
-            # be unique. 8dp = satoshi precision.
+            # sendmany keys must be unique — sum if two nodes share an address. 8dp = satoshi precision.
             outputs[addr] = round(outputs.get(addr, 0.0) + share, 8)
         if outputs:
             try:

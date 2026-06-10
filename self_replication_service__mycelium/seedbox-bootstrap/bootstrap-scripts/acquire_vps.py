@@ -73,19 +73,16 @@ def acquire(
 
     sporestack = SporeStackClient(token)
 
-    # Check balance
     logger.info("Checking SporeStack balance...")
     balance = sporestack.get_balance()
     logger.info(f"Balance: {balance.get('usd', 'N/A')}")
 
-    # Get quote (not supported for all providers)
     try:
         quote = sporestack.get_quote(flavor, days, provider)
         logger.info(f"Server cost: {quote.get('usd', 'N/A')} for {days} days")
     except SporeStackError:
         logger.info("Price quote not available for this provider, proceeding anyway")
 
-    # Launch server
     logger.info(f"Launching server: {hostname}")
     machine_id = sporestack.launch_server(
         flavor=flavor,
@@ -97,7 +94,6 @@ def acquire(
     )
     logger.info(f"Server launched: {machine_id}")
 
-    # Wait for server to be ready
     logger.info("Waiting for server to be ready...")
     server = sporestack.wait_for_server_ready(machine_id, timeout=300)
 
@@ -107,7 +103,6 @@ def acquire(
     ssh_port = server.get("ssh_port", 22)
     logger.info(f"Server ready: {host}:{ssh_port}")
 
-    # Save server info
     server_info = {
         "machine_id": machine_id,
         "host": host,
@@ -125,7 +120,6 @@ def acquire(
 
     ssh_host = f"{host}" if ":" in host else host
 
-    # Print success
     print()
     print("=" * 60)
     print("VPS ACQUIRED!")
@@ -162,7 +156,6 @@ After acquiring a VPS, run 'python bootstrap-scripts/deploy_seedbox.py' to deplo
 
     args = parser.parse_args()
 
-    # Handle list commands (don't need token)
     if args.list_flavors or args.list_os:
         client = SporeStackClient("dummy")
         if args.list_flavors:
@@ -175,7 +168,6 @@ After acquiring a VPS, run 'python bootstrap-scripts/deploy_seedbox.py' to deplo
                 print(f"  {os_info.get('slug')}: {os_info.get('description', 'N/A')}")
         return
 
-    # Load token
     token = args.token or load_token()
     if not token:
         logger.error("SporeStack token not found.")
