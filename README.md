@@ -12,15 +12,13 @@ Our work contains several novelties:
 
 ## Towards recursive self-improving AI
 
-Our superorganism is an _exploratory_ experiment for self-hosted and self-improving systems under direct human control.
-It is a decentralized system ability to create seedboxes, vote on systems changes, and donate GPU resources for decentralised AI. It runs on our machines, but it's complex stuff. Frontpage Screenshot with torrent management, self-replicating server fleet overview, voting part, and autoresearch (viewing page).
-
-![Superorganism Eternal Autoresearch](https://github.com/user-attachments/assets/b43da39a-4155-48b6-9b62-451897f61fa2)
+Citizens should control AI. We want control of AI to be as simple as possible. Superorganism has a voting system based on new features. For example:
 
 ![demo_of_democratic_voting_process](https://github.com/user-attachments/assets/c5881768-71df-4a82-8f7b-ad3c02a64ceb)
 
-Disclaimer is that each novelty still requires years of polish, but they work and together form a unique system.
-<img width="1838" height="885" alt="Image" src="https://github.com/user-attachments/assets/971b1bfb-7566-4e3f-b51a-04b8202c8c14" />
+Our superorganism is an _exploratory_ experiment for self-hosted and self-improving systems under direct human control. It is a decentralized system ability to create seedboxes, vote on systems changes, and donate GPU resources for decentralised AI. It runs on our machines, but it's complex stuff. Frontpage screenshot with 1) torrent management, 2) self-replicating server fleet overview, 3) voting part, and 4) autoresearch (shown page).
+
+![Superorganism Eternal Autoresearch](https://github.com/user-attachments/assets/b43da39a-4155-48b6-9b62-451897f61fa2)
 
 ## Technical documentation
 
