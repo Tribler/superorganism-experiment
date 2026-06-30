@@ -15,27 +15,28 @@ Our work contains several novelties:
 Disclaimer is that each novelty still requires years of polish, but they work and together form a unique system.
 <img width="1838" height="885" alt="Image" src="https://github.com/user-attachments/assets/971b1bfb-7566-4e3f-b51a-04b8202c8c14" />
 
-## Detailed progress issues with weekly updates 
+## Technical documentation
 
-Andrei: [live switch between re-ranking algorithm using P2P multi-arm bandit and performance gossip protocol](https://github.com/Tribler/tribler/issues/8666)
+Superorganism is the joint work of professors, post-docs, phd students and master students (e.g. the ones doing the real work!).
+Algorithms and key components are documented in these documents.
 
-Stan: [voting and stake your identity](https://github.com/Tribler/tribler/issues/8812)
+Algorithm | Superorganism algorithm extensive documentation
+---|---
+SurvivalRank | [Evolutionary survival of fittest algorithm using decentralized multi-arm bandits](https://github.com/user-attachments/files/29499230/SurvivalRank.Decentralized.Evolution.of.Search.Models.pdf)
+FuSST | [Social Capital Accounting for trust with Sybil resilience](https://github.com/user-attachments/files/29458168/Master_Thesis___Towards_Solving_Sybil_Attacks_Using_Social_Capital_Accounting-4.pdf)
+TwoStepDemocracy | [TwoStepDemocracy: prototyping of self-evolving, democratic, and decentralized systems](https://arxiv.org/html/2606.25559v1) {[#8812](https://github.com/Tribler/tribler/issues/8812)}
+SelfReplicate | [Self-replicating seedbox servers using programmable money](https://github.com/user-attachments/files/29197003/MSc__Matei_Dogariu_arXiv.pdf)
+DelftClaw | [Infrastructure for decentralized OpenClaw semantic search agents: identity, trust, communication, and self-replication](https://github.com/tribler/tribler/issues/8923) (5 bsc students, needs integration)
 
-Matei: [self-replicating server. Server with wallet can buy antoher server and clone itself.](https://github.com/Tribler/tribler/issues/8664)
+## Features - Everything we built so far 
 
-Aayush: [trust framework, reputation function of identities, social capital account[keys](keys)ing for Sybil attack detection.](https://github.com/Tribler/tribler/issues/8667)
+Now that the basic components are all operational, we're working on integration.
 
-Marcel: P2P search with [decentralized relevance ranking](https://github.com/mg98/dart-live/)
-
-## Everything we built so far / Desired features for first March release
-
-1) A million URLs with creative commons content
-2) Liberate this content to robotic Bittorrent seedboxes fleet
-3) Semantic search
-4) Bitcoin wallet for donations and funding Seedboxes
-5) Voting and use your Bitcoin wallet to stake your identity (public key)
-
-other ideas: Bounties, seedbox fleet? status of IPv8 network? Money in system, amount of discovered users?
+1) A [million URLs with creative commons](https://github.com/Tribler/superorganism-experiment/blob/main/self_replication_service__mycelium/seedbox-bootstrap/yt-cc-dataset-id-extraction/cc_video_ids.txt.tar.bz2) content on Youtube + download tooling + Bittorrent [autoseeding](https://github.com/Tribler/superorganism-experiment/tree/main/self_replication_service__mycelium/seedbox-bootstrap)
+2) Decentralized [survival-of-fittest learn-to-rank](https://github.com/Tribler/superorganism-experiment/tree/main/crowdsourced_learn_to_rank) algorithm.
+3) Semantic overlay (ToDo [integrate our decentralized semantic overlay](https://arxiv.org/html/2502.10151v1))
+4) Search engine (ToDo [integrate our decentralized learn-to-rank AI algorithms](https://arxiv.org/html/2505.07452v1))
+5) Voting and use your Bitcoin wallet to stake your identity (ToDo move from testnet to mainnet)
 
 ## General
 
@@ -138,11 +139,3 @@ Autonomous VPS provisioning system using Bitcoin payments and SporeStack API. De
 - Seeds content via BitTorrent (libtorrent)
 - Auto-updates from GitHub and restarts on changes
 - Broadcasts seeded content to IPV8 peers for health monitoring
-
-### Deployment
-
-This is deployed to a SporeStack VPS via `seedbox-bootstrap/`. See that directory for deployment instructions.
-
-## Mycelium-simulation 
-
-## Democracy
