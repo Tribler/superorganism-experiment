@@ -65,15 +65,18 @@ ELIMINATION_THRESHOLD = 0.75  # Eliminate if reward < threshold * best_reward
 # reproducible.
 SEED: int | None = None
 
+_BASE_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
+_BENCH_ROOT = _BASE_DIR / "ltr-benchmarking" if getattr(sys, 'frozen', False) else _BASE_DIR
+
 # Experiment config
 DATASET_ID = "istella"  # Dataset to replay
-DATA_DIR = Path(__file__).parent / "data"
-MODELS_DIR = Path(__file__).parent / "models"
+DATA_DIR = _BENCH_ROOT / "data"
+MODELS_DIR = _BENCH_ROOT / "models"
 # Models pulled from peers via libtorrent land here rather than in MODELS_DIR,
 # so it's obvious which files a peer authored locally vs. received over the
 # wire. The directory is created on first use.
-DOWNLOADS_DIR = Path(__file__).parent / "downloaded_models"
-LOGS_DIR = Path(__file__).parent / "logs"
+DOWNLOADS_DIR = _BENCH_ROOT / "downloaded_models"
+LOGS_DIR = _BENCH_ROOT / "logs"
 
 LOG_FILE = LOGS_DIR / f"experiment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 

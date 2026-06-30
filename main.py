@@ -38,13 +38,14 @@ from ui.common.fonts import load_application_fonts
 
 
 def setup_logging() -> None:
-    config_file = pathlib.Path(__file__).parent / "logging_config.json"
+    base_dir = pathlib.Path(sys.executable).parent if getattr(sys, 'frozen', False) else pathlib.Path(__file__).parent
+    config_file = base_dir / "logging_config.json"
 
     with open(config_file, "r", encoding="utf-8") as f:
         logging_config = json.load(f)
 
     _normalize_logging_config_for_python_version(logging_config)
-    _ensure_log_directories_exist(logging_config, base_dir=config_file.parent)
+    _ensure_log_directories_exist(logging_config, base_dir=base_dir)
 
     logging.config.dictConfig(logging_config)
 

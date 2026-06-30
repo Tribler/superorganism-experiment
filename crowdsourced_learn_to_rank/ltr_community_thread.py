@@ -18,7 +18,14 @@ from typing import Optional
 
 from PySide6.QtCore import QThread, Signal
 
-_BENCH_DIR = Path(__file__).parent / "ltr-benchmarking"
+_BENCH_DIR_INTERNAL = Path(__file__).parent / "ltr-benchmarking"
+if str(_BENCH_DIR_INTERNAL) not in sys.path:
+    sys.path.insert(0, str(_BENCH_DIR_INTERNAL))
+_BASE_EXTERNAL_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
+_BENCH_DIR_EXTERNAL = _BASE_EXTERNAL_DIR / "ltr-benchmarking"
+_BENCH_DIR_EXTERNAL.mkdir(parents=True, exist_ok=True)
+_BENCH_DIR = _BENCH_DIR_INTERNAL
+
 if str(_BENCH_DIR) not in sys.path:
     sys.path.insert(0, str(_BENCH_DIR))
 
@@ -217,7 +224,7 @@ class LTRCommunityThread(QThread):
         self.hotswap_model     = hotswap_model
         self.peer_port         = peer_port
         self.key_path          = key_path or str(
-            _BENCH_DIR / f"peer_community_{os.getpid()}.pem"
+            _BENCH_DIR_EXTERNAL / f"peer_community_{os.getpid()}.pem"
         )
 
         self.bootstrap_addresses = bootstrap_addresses or []
@@ -267,7 +274,7 @@ class LTRCommunityThread(QThread):
 
         # ── Load dataset ──────────────────────────────────────────────────
         state.event(f"Loading dataset '{self.dataset_id}'…", "info")
-        dataset = get_dataset(self.dataset_id, _BENCH_DIR / "data")
+        dataset = get_dataset(self.dataset_id, _BENCH_DIR_EXTERNAL / "data")
         X_test, y_test, _, groups = dataset.load_test()
         query_boundaries: list[tuple[int, int]] = []
         start = 0
